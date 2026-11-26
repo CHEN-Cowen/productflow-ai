@@ -13,7 +13,9 @@ from .errors import reject
 from .providers import image as image_provider
 from .providers import llm as llm_provider
 from .providers import video as video_provider
-from .services import catalog, generation, imports, planning, runs
+from .services import catalog, generation, imports, planning, runs, tenants
+from .services import extractions as extraction_service
+from .services import issues as issue_service
 
 router = APIRouter(prefix="/api/v1")
 
@@ -161,6 +163,22 @@ def models_status() -> dict[str, Any]:
     }
 
 
+# ---------- 租户 ----------
+class TenantIn(BaseModel):
+    name: str
+    id: str = ""
+
+
+@router.get("/tenants")
+def list_tenants() -> list[dict[str, Any]]:
+    return tenants.list_tenants()
+
+
+@router.post("/tenants", status_code=201)
+def create_tenant(body: TenantIn) -> dict[str, Any]:
+    return tenants.create_tenant(body.name, body.id)
+
+
 # ---------- 品类模板 ----------
 @router.get("/categories")
 def categories() -> list[dict[str, Any]]:
@@ -301,6 +319,26 @@ def batch_import(body: BatchIn) -> dict[str, Any]:
 @router.get("/imports/batch/{job_id}")
 def get_batch(job_id: str) -> dict[str, Any]:
     return imports.get_batch(job_id)
+
+
+# ---------- 提取记录与数据异常 ----------
+class ResolveIn(BaseModel):
+    resolution: str
+
+
+@router.get("/imports/{import_id}/extractions")
+def import_extractions(import_id: str) -> list[dict[str, Any]]:
+    return extraction_service.list_for_import(import_id)
+
+
+@router.get("/products/{product_id}/issues")
+def product_issues(product_id: str, resolution_status: str = "") -> list[dict[str, Any]]:
+    return issue_service.list_for_product(product_id, resolution_status)
+
+
+@router.post("/issues/{issue_id}/resolve")
+def resolve_issue(issue_id: str, body: ResolveIn) -> dict[str, Any]:
+    return issue_service.resolve(issue_id, body.resolution)
 
 
 # ---------- 素材与资产 ----------

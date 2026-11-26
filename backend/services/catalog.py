@@ -13,7 +13,7 @@ from .. import config
 from ..db import dumps, loads, one, now, rows, session
 from ..errors import conflict, not_found, reject
 from ..templates import field_labels, normalize_schema
-from . import rules
+from . import rules, tenants
 
 ANGLES = {"front": "正面", "back": "背面", "side": "侧面", "top": "顶部", "bottom": "底部", "interior": "内里"}
 PURPOSES = {"reference": "商品参考", "spec": "规格资料", "marketing": "营销素材"}
@@ -110,9 +110,9 @@ def list_products(search: str = "", category_id: str = "") -> list[dict[str, Any
         "(SELECT COUNT(*) FROM product_versions v WHERE v.product_id=p.id) AS version_count, "
         "(SELECT COUNT(*) FROM plans pl WHERE pl.product_id=p.id) AS plan_count, "
         "(SELECT COUNT(*) FROM outputs o JOIN plans pl ON pl.id=o.plan_id WHERE pl.product_id=p.id) AS output_count "
-        "FROM products p WHERE 1=1"
+        "FROM products p WHERE p.tenant_id=?"
     )
-    params: list[Any] = []
+    params: list[Any] = [tenants.current()]
     if search:
         query += " AND (p.id LIKE ? OR p.name LIKE ?)"
         params += [f"%{search}%", f"%{search}%"]
@@ -142,9 +142,9 @@ def create_product(payload: dict[str, Any]) -> dict[str, Any]:
         if one(db, "SELECT 1 FROM products WHERE id=?", (product_id,)):
             raise conflict("该商品编号已存在，请使用新编号或打开既有商品", code="duplicate_product")
         db.execute(
-            "INSERT INTO products(id,name,category_id,brand,origin,description,status,created_at,updated_at) "
-            "VALUES(?,?,?,?,?,?,?,?,?)",
-            (product_id, name, category_id, str(payload.get("brand") or "").strip(),
+            "INSERT INTO products(id,tenant_id,name,category_id,brand,origin,description,status,created_at,updated_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?)",
+            (product_id, tenants.current(), name, category_id, str(payload.get("brand") or "").strip(),
              str(payload.get("origin") or "").strip(), str(payload.get("description") or "").strip(),
              "draft", stamp, stamp),
         )
@@ -156,6 +156,10 @@ def update_product(product_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         current = one(db, "SELECT * FROM products WHERE id=?", (product_id,))
         if current is None:
             raise not_found("找不到该商品")
+        if (current.get("tenant_id") or "default") != tenants.current():
+            from ..errors import tenant_denied
+
+            raise tenant_denied(f"商品 {product_id} 不属于当前租户")
         name = str(payload.get("name", current["name"])).strip()
         if not name or len(name) > 120:
             raise reject("商品名称需为 1-120 字")
@@ -246,6 +250,10 @@ def product_detail(db, product_id: str) -> dict[str, Any]:
     row = one(db, "SELECT * FROM products WHERE id=?", (product_id,))
     if row is None:
         raise not_found("找不到该商品")
+    if (row.get("tenant_id") or "default") != tenants.current():
+        from ..errors import tenant_denied
+
+        raise tenant_denied(f"商品 {product_id} 不属于当前租户")
     product = _product(row)
     schema = category(db, product["category_id"])["schema"]
     latest = latest_version(db, product_id)
@@ -297,8 +305,8 @@ def create_sku(product_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         if one(db, "SELECT 1 FROM skus WHERE product_id=? AND sku_code=?", (product_id, code)):
             raise conflict("该商品下 SKU 编码已存在")
         sku_id = uuid4().hex
-        db.execute("INSERT INTO skus(id,product_id,sku_code,attributes_json,created_at) VALUES(?,?,?,?,?)",
-                   (sku_id, product_id, code, dumps(attributes), stamp))
+        db.execute("INSERT INTO skus(id,tenant_id,product_id,sku_code,attributes_json,created_at) VALUES(?,?,?,?,?,?)",
+                   (sku_id, tenants.current(), product_id, code, dumps(attributes), stamp))
         return _sku(one(db, "SELECT * FROM skus WHERE id=?", (sku_id,)))
 
 
@@ -382,16 +390,17 @@ def upload_source(
             raise not_found("找不到该商品")
         if sku_id and one(db, "SELECT 1 FROM skus WHERE id=? AND product_id=?", (sku_id, product_id)) is None:
             raise reject("SKU 不属于该商品", code="invalid_sku")
-        duplicate = one(db, "SELECT id FROM sources WHERE product_id=? AND sha256=?", (product_id, digest))
+        duplicate = one(db, "SELECT id FROM sources WHERE tenant_id=? AND product_id=? AND sha256=?",
+                        (tenants.current(), product_id, digest))
         if duplicate:
             raise conflict("该资料已上传过，请勿重复上传", hint=f"已有资料 ID：{duplicate['id']}",
                            code="duplicate_source")
         path.write_bytes(content)
         try:
             db.execute(
-                "INSERT INTO sources(id,product_id,sku_id,name,mime,size,sha256,kind,purpose,view_angle,"
-                "review_status,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (source_id, product_id, sku_id or None, safe_name, mime, len(content), digest, kind,
+                "INSERT INTO sources(id,tenant_id,product_id,sku_id,name,mime,size,sha256,kind,purpose,view_angle,"
+                "review_status,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (source_id, tenants.current(), product_id, sku_id or None, safe_name, mime, len(content), digest, kind,
                  purpose, view_angle, review_status, "stored", stamp),
             )
         except Exception:
@@ -401,8 +410,8 @@ def upload_source(
 
 
 def list_sources(product_id: str, *, angle: str = "", review_status: str = "", search: str = "") -> list[dict[str, Any]]:
-    query = "SELECT * FROM sources WHERE product_id=?"
-    params: list[Any] = [product_id]
+    query = "SELECT * FROM sources WHERE tenant_id=? AND product_id=?"
+    params: list[Any] = [tenants.current(), product_id]
     if angle:
         query += " AND view_angle=?"
         params.append(angle)
@@ -419,7 +428,8 @@ def list_sources(product_id: str, *, angle: str = "", review_status: str = "", s
 
 def get_source(product_id: str, source_id: str) -> dict[str, Any]:
     with session() as db:
-        row = one(db, "SELECT * FROM sources WHERE id=? AND product_id=?", (source_id, product_id))
+        row = one(db, "SELECT * FROM sources WHERE tenant_id=? AND id=? AND product_id=?",
+                  (tenants.current(), source_id, product_id))
         if row is None:
             raise not_found("找不到该资料，或资料不属于该商品")
         return _source(row)
@@ -427,7 +437,8 @@ def get_source(product_id: str, source_id: str) -> dict[str, Any]:
 
 def source_file(product_id: str, source_id: str) -> tuple[dict[str, Any], Path]:
     with session() as db:
-        row = one(db, "SELECT * FROM sources WHERE id=? AND product_id=?", (source_id, product_id))
+        row = one(db, "SELECT * FROM sources WHERE tenant_id=? AND id=? AND product_id=?",
+                  (tenants.current(), source_id, product_id))
         if row is None:
             raise not_found("找不到该资料，或资料不属于该商品")
         source = _source(row)
@@ -445,8 +456,9 @@ def source_file(product_id: str, source_id: str) -> tuple[dict[str, Any], Path]:
 
 def list_all_sources(*, product_id: str = "", angle: str = "", review_status: str = "",
                      search: str = "") -> list[dict[str, Any]]:
-    query = ("SELECT s.*, p.name AS product_name FROM sources s JOIN products p ON p.id=s.product_id WHERE 1=1")
-    params: list[Any] = []
+    query = ("SELECT s.*, p.name AS product_name FROM sources s JOIN products p ON p.id=s.product_id "
+             "WHERE s.tenant_id=?")
+    params: list[Any] = [tenants.current()]
     if product_id:
         query += " AND s.product_id=?"
         params.append(product_id)
@@ -467,7 +479,8 @@ def list_all_sources(*, product_id: str = "", angle: str = "", review_status: st
 
 def update_source(product_id: str, source_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     with session() as db:
-        current = one(db, "SELECT * FROM sources WHERE id=? AND product_id=?", (source_id, product_id))
+        current = one(db, "SELECT * FROM sources WHERE tenant_id=? AND id=? AND product_id=?",
+                      (tenants.current(), source_id, product_id))
         if current is None:
             raise not_found("找不到该资料，或资料不属于该商品")
         angle = payload.get("view_angle", current["view_angle"])
@@ -509,6 +522,31 @@ def suggest_angle(filename: str) -> dict[str, Any]:
     return {"angle": "", "label": "", "method": "filename_rule", "note": "文件名未包含视角关键词，请人工选择"}
 
 
+def _plan_impact_reasons(plan: dict[str, Any], changed: list[dict[str, Any]]) -> list[str]:
+    """分析旧版本策划受字段变更影响的具体原因（复杂内容影响分析）。"""
+    content = loads(plan.get("content_json") or plan.get("script"), {})
+    reasons: list[str] = []
+    points = content.get("selling_points") or []
+    for index, point in enumerate(points, start=1):
+        field = point.get("field") or ""
+        for ch in changed:
+            if ch["field"] == field:
+                reasons.append(f"卖点{index}绑定已变更字段「{ch['label']}」")
+    texts: list[str] = []
+    for key in ("theme", "copy", "visual", "image_prompt"):
+        if isinstance(content.get(key), str):
+            texts.append(content[key])
+    for shot in content.get("shots") or []:
+        if isinstance(shot, dict) and shot.get("caption"):
+            texts.append(shot["caption"])
+    joined = " ".join(texts)
+    for ch in changed:
+        old_value = (ch.get("from") or "").strip()
+        if old_value and old_value in joined:
+            reasons.append(f"内容引用字段「{ch['label']}」的旧值“{old_value}”")
+    return sorted(set(reasons))
+
+
 def impact(product_id: str) -> dict[str, Any]:
     with session() as db:
         if one(db, "SELECT 1 FROM products WHERE id=?", (product_id,)) is None:
@@ -532,7 +570,7 @@ def impact(product_id: str) -> dict[str, Any]:
                 continue
             outputs = rows(db, "SELECT id, kind, status FROM outputs WHERE plan_id=?", (plan["id"],))
             affected.append({"id": plan["id"], "scene": plan["scene"], "version_id": plan["version_id"],
-                             "outputs": outputs})
+                             "outputs": outputs, "impact_reasons": _plan_impact_reasons(plan, changed)})
         return {
             "product_id": product_id,
             "current_version": {"id": current["id"], "version": current["version"]},

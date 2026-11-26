@@ -106,25 +106,65 @@ def _extract_json(payload: dict) -> dict:
     return value
 
 
+def _audit(cfg: dict, started: float, input_summary: str, status: str, *,
+           error_code: str = "", error: str = "", retry_count: int = 0,
+           request_id: str = "", result: dict | None = None) -> None:
+    """把模型调用写入统一审计日志；审计写失败不阻断主流程。"""
+    try:
+        from ..services import ai_logs
+
+        output_summary = ""
+        if result is not None:
+            output_summary = json.dumps(result, ensure_ascii=False)[:500]
+        ai_logs.record(
+            provider="llm",
+            model=cfg.get("model") or "",
+            input_summary=input_summary,
+            output_summary=output_summary,
+            duration_ms=int((time.monotonic() - started) * 1000),
+            status=status,
+            error_code=error_code,
+            error=error,
+            retry_count=retry_count,
+            request_id=request_id,
+        )
+    except Exception:  # noqa: BLE001 - 审计失败不影响业务
+        log.warning("failed to write ai_execution_log", exc_info=True)
+
+
 def generate_structured(instruction: str, data: dict) -> dict:
     """调用文本模型并返回 JSON 对象；非法 JSON 时做一次严格重试。"""
+    cfg = config.llm_config()
+    started = time.monotonic()
+    input_summary = json.dumps(data, ensure_ascii=False)[:500]
     messages = [
         {"role": "system", "content": instruction},
         {"role": "user", "content": json.dumps(data, ensure_ascii=False)},
     ]
-    payload, _ = _request(messages)
+    payload, request_id = _request(messages)
     try:
-        return _extract_json(payload)
+        result = _extract_json(payload)
+        _audit(cfg, started, input_summary, "success", request_id=request_id, result=result)
+        return result
     except ApiError as error:
         if error.code != "provider_invalid_json":
+            _audit(cfg, started, input_summary, "failed", error_code=error.code,
+                   error=error.message, request_id=request_id)
             raise
         log.info("llm invalid json, retry once with stricter instruction")
     retry_messages = messages + [
         {"role": "assistant", "content": "（上一次输出不是合法 JSON）"},
         {"role": "user", "content": "请只返回一个合法 JSON 对象，不要代码块或解释文字。"},
     ]
-    payload, _ = _request(retry_messages, temperature=0)
-    return _extract_json(payload)
+    payload, request_id = _request(retry_messages, temperature=0)
+    try:
+        result = _extract_json(payload)
+    except ApiError as error:
+        _audit(cfg, started, input_summary, "failed", error_code=error.code,
+               error=error.message, retry_count=1, request_id=request_id)
+        raise
+    _audit(cfg, started, input_summary, "success", retry_count=1, request_id=request_id, result=result)
+    return result
 
 
 def connectivity() -> dict:

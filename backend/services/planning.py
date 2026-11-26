@@ -10,7 +10,7 @@ from ..db import dumps, loads, now, one, rows, session
 from ..errors import ApiError, conflict, not_found, reject
 from ..providers import llm
 from ..templates import field_labels
-from . import catalog, runs, rules
+from . import catalog, channel_strategy, runs, rules, tenants
 
 PLAN_INSTRUCTION = (
     "你是电商内容策划。只依据已确认商品事实和参考图视角策划，禁止增加事实中没有的材质、成分、功效、认证，"
@@ -168,6 +168,7 @@ def create_plan(product_id: str, body: dict[str, Any]) -> dict[str, Any]:
                 "channel": str(body.get("channel") or "抖音"),
                 "audience": str(body.get("audience") or "约30岁女性"),
                 "content_type": str(body.get("content_type") or "商品主图+短视频"),
+                "channel_strategy": channel_strategy.resolve(body.get("channel") or "抖音"),
                 "facts": [{"field": key, "label": labels.get(key, key), "value": value}
                           for key, value in fields.items()],
                 "references": [{"id": item["id"], "angle": item["angle"], "angle_label": item["angle_label"]}
@@ -182,10 +183,10 @@ def create_plan(product_id: str, body: dict[str, Any]) -> dict[str, Any]:
         stamp = now()
         with session() as db:
             db.execute(
-                "INSERT INTO plans(id,product_id,version_id,scene,source_ids,script,channel,audience,content_type,"
+                "INSERT INTO plans(id,tenant_id,product_id,version_id,scene,source_ids,script,channel,audience,content_type,"
                 "content_json,status,blocked_json,parent_plan_id,reused_outputs_json,created_at,updated_at) "
-                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (plan_id, product_id, version["id"], scene, dumps([item["id"] for item in refs]),
+                "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (plan_id, tenants.current(), product_id, version["id"], scene, dumps([item["id"] for item in refs]),
                  dumps(content.model_dump(by_alias=True)), str(body.get("channel") or "抖音"),
                  str(body.get("audience") or ""), str(body.get("content_type") or "商品主图+短视频"),
                  dumps(content.model_dump(by_alias=True)), "draft", dumps(blocked), "", "[]", stamp, stamp),
@@ -204,7 +205,7 @@ def create_plan(product_id: str, body: dict[str, Any]) -> dict[str, Any]:
 
 def _plan_row(plan_id: str) -> dict[str, Any]:
     with session() as db:
-        row = one(db, "SELECT * FROM plans WHERE id=?", (plan_id,))
+        row = one(db, "SELECT * FROM plans WHERE id=? AND tenant_id=?", (plan_id, tenants.current()))
         if row is None:
             raise not_found("策划不存在")
         return row
@@ -212,7 +213,7 @@ def _plan_row(plan_id: str) -> dict[str, Any]:
 
 def get_plan(plan_id: str) -> dict[str, Any]:
     with session() as db:
-        row = one(db, "SELECT * FROM plans WHERE id=?", (plan_id,))
+        row = one(db, "SELECT * FROM plans WHERE id=? AND tenant_id=?", (plan_id, tenants.current()))
         if row is None:
             raise not_found("策划不存在")
         return _with_meta(db, row)
@@ -220,10 +221,11 @@ def get_plan(plan_id: str) -> dict[str, Any]:
 
 def list_plans(product_id: str) -> list[dict[str, Any]]:
     with session() as db:
-        if one(db, "SELECT 1 FROM products WHERE id=?", (product_id,)) is None:
+        if one(db, "SELECT 1 FROM products WHERE id=? AND tenant_id=?", (product_id, tenants.current())) is None:
             raise not_found("找不到该商品")
         return [_with_meta(db, row) for row in rows(
-            db, "SELECT * FROM plans WHERE product_id=? ORDER BY created_at DESC", (product_id,))]
+            db, "SELECT * FROM plans WHERE tenant_id=? AND product_id=? ORDER BY created_at DESC",
+            (tenants.current(), product_id))]
 
 
 def update_plan(plan_id: str, body: dict[str, Any]) -> dict[str, Any]:
@@ -258,19 +260,44 @@ def confirm_plan(plan_id: str) -> dict[str, Any]:
         terms = "、".join(sorted({item["term"] for item in blocked}))
         raise conflict(f"策划含无事实依据或绝对化宣传词：{terms}", hint="请编辑删除这些表述后再确认",
                        code="claim_blocked")
-    latest = None
+    content = loads(row.get("content_json") or row.get("script"), {})
     with session() as db:
         latest = one(db, "SELECT id FROM product_versions WHERE product_id=? ORDER BY version DESC, id DESC LIMIT 1",
                      (row["product_id"],))
         if latest and latest["id"] != row["version_id"]:
             raise conflict("商品已有更新版本，请基于最新版本重新创建策划", code="stale_version")
-        db.execute("UPDATE plans SET status='confirmed', updated_at=? WHERE id=?", (now(), plan_id))
+        previous = one(db, "SELECT version_number FROM planning_versions WHERE planning_task_id=? "
+                           "ORDER BY version_number DESC LIMIT 1", (plan_id,))
+        version_number = (previous["version_number"] + 1) if previous else 1
+        strategy, creative, image_plan, video_plan = _split_content(row, content)
+        cursor = db.execute(
+            "INSERT INTO planning_versions(tenant_id,planning_task_id,version_number,strategy_json,creative_json,"
+            "image_plan_json,video_plan_json,approval_status,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+            (tenants.current(), plan_id, version_number, dumps(strategy), dumps(creative),
+             dumps(image_plan), dumps(video_plan), "approved", now()),
+        )
+        version_id = cursor.lastrowid
+        db.execute("UPDATE plans SET status='confirmed', current_version_id=?, updated_at=? WHERE id=?",
+                   (version_id, now(), plan_id))
         db.execute(
-            "INSERT INTO reviews(id,target_type,target_id,action,note,payload_json,reviewer,created_at) "
-            "VALUES(?,?,?,?,?,?,?,?)",
-            (uuid4().hex, "plan", plan_id, "confirm", "人工确认策划", "{}", "user", now()),
+            "INSERT INTO reviews(id,tenant_id,target_type,target_id,action,note,payload_json,reviewer,created_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
+            (uuid4().hex, tenants.current(), "plan", plan_id, "confirm", "人工确认策划",
+             dumps({"planning_version_id": version_id}), "user", now()),
         )
     return get_plan(plan_id)
+
+
+def _split_content(row: dict[str, Any], content: dict[str, Any]) -> tuple[dict, dict, dict, dict]:
+    strategy = {"scene": row.get("scene") or "", "channel": row.get("channel") or "",
+                "audience": row.get("audience") or "", "content_type": row.get("content_type") or "",
+                "channel_strategy": channel_strategy.resolve(row.get("channel") or "")}
+    creative = {"theme": content.get("theme") or "", "copy": content.get("copy") or "",
+                "visual": content.get("visual") or "", "hashtags": content.get("hashtags") or [],
+                "selling_points": content.get("selling_points") or []}
+    image_plan = {"image_prompt": content.get("image_prompt") or ""}
+    video_plan = {"shots": content.get("shots") or []}
+    return strategy, creative, image_plan, video_plan
 
 
 def reuse_plan(plan_id: str, body: dict[str, Any]) -> dict[str, Any]:
@@ -306,3 +333,99 @@ def reuse_plan(plan_id: str, body: dict[str, Any]) -> dict[str, Any]:
     created = get_plan(created["id"])
     created["parent_plan"] = {"id": plan_id, "scene": source["scene"], "source_ids": loads(source["source_ids"], [])}
     return created
+
+
+def _planning_version_to_dict(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row["id"], "planning_task_id": row["planning_task_id"],
+        "version_number": row["version_number"],
+        "strategy": loads(row["strategy_json"], {}),
+        "creative": loads(row["creative_json"], {}),
+        "image_plan": loads(row["image_plan_json"], {}),
+        "video_plan": loads(row["video_plan_json"], {}),
+        "approval_status": row["approval_status"],
+        "created_at": row["created_at"],
+    }
+
+
+def list_plan_versions(plan_id: str) -> list[dict[str, Any]]:
+    _plan_row(plan_id)
+    with session() as db:
+        return [_planning_version_to_dict(row) for row in rows(
+            db, "SELECT * FROM planning_versions WHERE tenant_id=? AND planning_task_id=? "
+                "ORDER BY version_number DESC", (tenants.current(), plan_id))]
+
+
+def get_plan_version(plan_id: str, version_id: int) -> dict[str, Any]:
+    _plan_row(plan_id)
+    with session() as db:
+        row = one(db, "SELECT * FROM planning_versions WHERE id=? AND tenant_id=? AND planning_task_id=?",
+                  (version_id, tenants.current(), plan_id))
+        if row is None:
+            raise not_found("策划版本不存在")
+        return _planning_version_to_dict(row)
+
+
+def planning_output(plan_id: str) -> dict[str, Any]:
+    """输出结构化策划结果（§7.9），需已确认（存在 approved 版本）。"""
+    row = _plan_row(plan_id)
+    version_id = row.get("current_version_id") or 0
+    with session() as db:
+        pv = one(db, "SELECT * FROM planning_versions WHERE id=? AND tenant_id=?", (version_id, tenants.current())) \
+            if version_id else None
+    if pv is None or pv["approval_status"] != "approved":
+        raise conflict("策划尚未确认，没有可输出的版本", code="plan_not_confirmed")
+    strategy = loads(pv["strategy_json"], {})
+    creative = loads(pv["creative_json"], {})
+    return {
+        "planning_task_id": plan_id,
+        "schema_version": "1.0",
+        "product_id": row["product_id"],
+        "product_version_id": row["version_id"],
+        "channel": row.get("channel") or "",
+        "marketing_goal": row.get("scene") or "",
+        "target_audience": row.get("audience") or "",
+        "selling_points": creative.get("selling_points") or [],
+        "marketing_strategy": strategy,
+        "creative_brief": creative,
+        "image_plan": loads(pv["image_plan_json"], {}),
+        "video_plan": loads(pv["video_plan_json"], {}),
+        "reference_asset_ids": loads(row["source_ids"], []),
+        "approval_status": pv["approval_status"],
+    }
+
+
+def dispatch(plan_id: str) -> dict[str, Any]:
+    """下发生产（§7.9）。仅在策划已确认后允许；不伪造图片/视频已生成。"""
+    row = _plan_row(plan_id)
+    if row.get("status") != "confirmed":
+        raise conflict("策划未确认，不能下发生产", code="plan_not_confirmed")
+    output = planning_output(plan_id)
+    with session() as db:
+        db.execute(
+            "INSERT INTO reviews(id,tenant_id,target_type,target_id,action,note,payload_json,reviewer,created_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
+            (uuid4().hex, tenants.current(), "plan", plan_id, "dispatch", "下发结构化生产方案",
+             dumps({"planning_version_id": row.get("current_version_id") or 0}), "user", now()),
+        )
+    return {"dispatched": True, "output": output}
+
+
+def list_all_plans() -> list[dict[str, Any]]:
+    with session() as db:
+        return [_with_meta(db, row) for row in rows(
+            db, "SELECT * FROM plans WHERE tenant_id=? ORDER BY created_at DESC", (tenants.current(),))]
+
+
+def cancel_plan(plan_id: str) -> dict[str, Any]:
+    row = _plan_row(plan_id)
+    if row.get("status") in {"confirmed", "cancelled"}:
+        raise conflict("已确认或已取消的策划不能取消", code="plan_not_cancellable")
+    with session() as db:
+        db.execute("UPDATE plans SET status='cancelled', updated_at=? WHERE id=?", (now(), plan_id))
+        db.execute(
+            "INSERT INTO reviews(id,tenant_id,target_type,target_id,action,note,payload_json,reviewer,created_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
+            (uuid4().hex, tenants.current(), "plan", plan_id, "cancel", "取消策划", "{}", "user", now()),
+        )
+    return get_plan(plan_id)

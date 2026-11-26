@@ -18,8 +18,17 @@ CREATE TABLE IF NOT EXISTS meta (
     value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS tenants (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL DEFAULT ''
+);
+
 CREATE TABLE IF NOT EXISTS products (
     id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     name TEXT NOT NULL,
     category_id TEXT NOT NULL DEFAULT 'BAG',
     brand TEXT NOT NULL DEFAULT '',
@@ -50,6 +59,7 @@ CREATE TABLE IF NOT EXISTS category_versions (
 
 CREATE TABLE IF NOT EXISTS skus (
     id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     product_id TEXT NOT NULL REFERENCES products(id),
     sku_code TEXT NOT NULL,
     attributes_json TEXT NOT NULL DEFAULT '{}',
@@ -59,6 +69,7 @@ CREATE TABLE IF NOT EXISTS skus (
 
 CREATE TABLE IF NOT EXISTS sources (
     id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     product_id TEXT NOT NULL REFERENCES products(id),
     sku_id TEXT,
     name TEXT NOT NULL,
@@ -75,6 +86,7 @@ CREATE TABLE IF NOT EXISTS sources (
 
 CREATE TABLE IF NOT EXISTS imports (
     id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     product_id TEXT NOT NULL,
     category TEXT NOT NULL,
     category_id TEXT NOT NULL DEFAULT '',
@@ -91,6 +103,7 @@ CREATE TABLE IF NOT EXISTS imports (
 
 CREATE TABLE IF NOT EXISTS product_versions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     product_id TEXT NOT NULL,
     import_id TEXT NOT NULL DEFAULT '',
     category TEXT NOT NULL,
@@ -106,8 +119,10 @@ CREATE TABLE IF NOT EXISTS product_versions (
 
 CREATE TABLE IF NOT EXISTS plans (
     id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     product_id TEXT NOT NULL,
     version_id INTEGER NOT NULL,
+    current_version_id INTEGER NOT NULL DEFAULT 0,
     scene TEXT NOT NULL,
     source_ids TEXT NOT NULL DEFAULT '[]',
     script TEXT NOT NULL DEFAULT '{}',
@@ -123,8 +138,22 @@ CREATE TABLE IF NOT EXISTS plans (
     updated_at TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS planning_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
+    planning_task_id TEXT NOT NULL,
+    version_number INTEGER NOT NULL DEFAULT 1,
+    strategy_json TEXT NOT NULL DEFAULT '{}',
+    creative_json TEXT NOT NULL DEFAULT '{}',
+    image_plan_json TEXT NOT NULL DEFAULT '{}',
+    video_plan_json TEXT NOT NULL DEFAULT '{}',
+    approval_status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL DEFAULT ''
+);
+
 CREATE TABLE IF NOT EXISTS outputs (
     id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     plan_id TEXT NOT NULL,
     kind TEXT NOT NULL,
     filename TEXT NOT NULL,
@@ -144,6 +173,7 @@ CREATE TABLE IF NOT EXISTS outputs (
 
 CREATE TABLE IF NOT EXISTS reviews (
     id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     target_type TEXT NOT NULL,
     target_id TEXT NOT NULL,
     action TEXT NOT NULL,
@@ -155,6 +185,7 @@ CREATE TABLE IF NOT EXISTS reviews (
 
 CREATE TABLE IF NOT EXISTS workflow_runs (
     id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
     task_id TEXT NOT NULL,
     product_id TEXT NOT NULL DEFAULT '',
     workflow_type TEXT NOT NULL,
@@ -191,6 +222,101 @@ CREATE TABLE IF NOT EXISTS batch_jobs (
     updated_at TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS ai_execution_logs (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
+    task_id TEXT NOT NULL DEFAULT '',
+    step_name TEXT NOT NULL DEFAULT '',
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL DEFAULT '',
+    model_version TEXT NOT NULL DEFAULT '',
+    prompt_version TEXT NOT NULL DEFAULT '',
+    input_summary TEXT NOT NULL DEFAULT '',
+    output_summary TEXT NOT NULL DEFAULT '',
+    token_usage_json TEXT NOT NULL DEFAULT '{}',
+    cost REAL NOT NULL DEFAULT 0,
+    duration_ms INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL,
+    error_code TEXT NOT NULL DEFAULT '',
+    error TEXT NOT NULL DEFAULT '',
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    idempotency_key TEXT NOT NULL DEFAULT '',
+    request_id TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS workflow_steps (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
+    run_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    status TEXT NOT NULL,
+    input_snapshot TEXT NOT NULL DEFAULT '',
+    output_snapshot TEXT NOT NULL DEFAULT '',
+    error_code TEXT NOT NULL DEFAULT '',
+    error_message TEXT NOT NULL DEFAULT '',
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    started_at TEXT NOT NULL DEFAULT '',
+    completed_at TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS workflow_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
+    run_id TEXT NOT NULL,
+    step_name TEXT NOT NULL DEFAULT '',
+    event_type TEXT NOT NULL,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS extraction_records (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
+    import_job_id TEXT NOT NULL DEFAULT '',
+    source_file_id TEXT NOT NULL DEFAULT '',
+    product_id TEXT NOT NULL DEFAULT '',
+    raw_field TEXT NOT NULL DEFAULT '',
+    raw_value TEXT NOT NULL DEFAULT '',
+    mapped_field TEXT NOT NULL DEFAULT '',
+    extracted_value TEXT NOT NULL DEFAULT '',
+    confidence REAL NOT NULL DEFAULT 0,
+    source_location TEXT NOT NULL DEFAULT '{}',
+    model_name TEXT NOT NULL DEFAULT '',
+    prompt_version TEXT NOT NULL DEFAULT '',
+    extraction_status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS data_issues (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
+    product_id TEXT NOT NULL DEFAULT '',
+    attribute_key TEXT NOT NULL DEFAULT '',
+    issue_type TEXT NOT NULL,
+    severity TEXT NOT NULL DEFAULT 'warning',
+    source_records TEXT NOT NULL DEFAULT '[]',
+    issue_description TEXT NOT NULL DEFAULT '',
+    resolution_status TEXT NOT NULL DEFAULT 'open',
+    resolution_value TEXT NOT NULL DEFAULT '',
+    resolved_by TEXT NOT NULL DEFAULT '',
+    resolved_at TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id TEXT PRIMARY KEY,
+    tenant_id TEXT NOT NULL DEFAULT 'default',
+    operator_id TEXT NOT NULL DEFAULT 'user',
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    before_value TEXT NOT NULL DEFAULT '',
+    after_value TEXT NOT NULL DEFAULT '',
+    reason TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT ''
+);
+
 CREATE TABLE IF NOT EXISTS reference_tags (
     source_id TEXT PRIMARY KEY,
     angle TEXT NOT NULL
@@ -199,12 +325,18 @@ CREATE TABLE IF NOT EXISTS reference_tags (
 CREATE INDEX IF NOT EXISTS idx_sources_product ON sources(product_id);
 CREATE INDEX IF NOT EXISTS idx_versions_product ON product_versions(product_id, version);
 CREATE INDEX IF NOT EXISTS idx_plans_product ON plans(product_id);
+CREATE INDEX IF NOT EXISTS idx_planning_versions_task ON planning_versions(planning_task_id);
 CREATE INDEX IF NOT EXISTS idx_outputs_plan ON outputs(plan_id);
 CREATE INDEX IF NOT EXISTS idx_runs_task ON workflow_runs(task_id);
+CREATE INDEX IF NOT EXISTS idx_extractions_import ON extraction_records(import_job_id);
+CREATE INDEX IF NOT EXISTS idx_issues_product ON data_issues(product_id);
+CREATE INDEX IF NOT EXISTS idx_ai_logs_task ON ai_execution_logs(task_id);
+CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_logs(entity_type, entity_id);
 """
 
 MIGRATIONS: dict[str, list[tuple[str, str]]] = {
     "products": [
+        ("tenant_id", "TEXT NOT NULL DEFAULT 'default'"),
         ("category_id", "TEXT NOT NULL DEFAULT 'BAG'"),
         ("brand", "TEXT NOT NULL DEFAULT ''"),
         ("origin", "TEXT NOT NULL DEFAULT ''"),
@@ -214,6 +346,7 @@ MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("updated_at", "TEXT NOT NULL DEFAULT ''"),
     ],
     "sources": [
+        ("tenant_id", "TEXT NOT NULL DEFAULT 'default'"),
         ("sku_id", "TEXT"),
         ("size", "INTEGER NOT NULL DEFAULT 0"),
         ("sha256", "TEXT NOT NULL DEFAULT ''"),
@@ -225,6 +358,7 @@ MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("created_at", "TEXT NOT NULL DEFAULT ''"),
     ],
     "imports": [
+        ("tenant_id", "TEXT NOT NULL DEFAULT 'default'"),
         ("category_id", "TEXT NOT NULL DEFAULT ''"),
         ("issues_json", "TEXT NOT NULL DEFAULT '[]'"),
         ("source_ids_json", "TEXT NOT NULL DEFAULT '[]'"),
@@ -236,6 +370,7 @@ MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("updated_at", "TEXT NOT NULL DEFAULT ''"),
     ],
     "product_versions": [
+        ("tenant_id", "TEXT NOT NULL DEFAULT 'default'"),
         ("category_id", "TEXT NOT NULL DEFAULT ''"),
         ("version", "INTEGER NOT NULL DEFAULT 1"),
         ("provenance_json", "TEXT NOT NULL DEFAULT '{}'"),
@@ -244,6 +379,8 @@ MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("created_at", "TEXT NOT NULL DEFAULT ''"),
     ],
     "plans": [
+        ("tenant_id", "TEXT NOT NULL DEFAULT 'default'"),
+        ("current_version_id", "INTEGER NOT NULL DEFAULT 0"),
         ("channel", "TEXT NOT NULL DEFAULT ''"),
         ("audience", "TEXT NOT NULL DEFAULT ''"),
         ("content_type", "TEXT NOT NULL DEFAULT ''"),
@@ -256,6 +393,7 @@ MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("updated_at", "TEXT NOT NULL DEFAULT ''"),
     ],
     "outputs": [
+        ("tenant_id", "TEXT NOT NULL DEFAULT 'default'"),
         ("mime", "TEXT NOT NULL DEFAULT ''"),
         ("size", "INTEGER NOT NULL DEFAULT 0"),
         ("provider", "TEXT NOT NULL DEFAULT ''"),
@@ -268,7 +406,14 @@ MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("created_at", "TEXT NOT NULL DEFAULT ''"),
     ],
     "workflow_runs": [
+        ("tenant_id", "TEXT NOT NULL DEFAULT 'default'"),
         ("product_id", "TEXT NOT NULL DEFAULT ''"),
+    ],
+    "skus": [
+        ("tenant_id", "TEXT NOT NULL DEFAULT 'default'"),
+    ],
+    "reviews": [
+        ("tenant_id", "TEXT NOT NULL DEFAULT 'default'"),
     ],
 }
 
@@ -385,6 +530,15 @@ def _seed_categories(db: sqlite3.Connection) -> None:
             )
 
 
+def _seed_tenants(db: sqlite3.Connection) -> None:
+    stamp = now()
+    if one(db, "SELECT 1 FROM tenants WHERE id='default'") is None:
+        db.execute(
+            "INSERT INTO tenants(id,name,status,created_at,updated_at) VALUES(?,?,?,?,?)",
+            ("default", "默认租户", "active", stamp, stamp),
+        )
+
+
 def init_db() -> None:
     config.ensure_dirs()
     with session() as db:
@@ -392,3 +546,4 @@ def init_db() -> None:
         _add_missing_columns(db)
         _backfill(db)
         _seed_categories(db)
+        _seed_tenants(db)

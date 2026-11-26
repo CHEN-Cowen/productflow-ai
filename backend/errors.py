@@ -8,7 +8,8 @@
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 from fastapi import HTTPException
 
@@ -19,6 +20,9 @@ class ApiError(Exception):
     message: str
     code: str = "error"
     hint: str = ""
+    details: dict[str, Any] = field(default_factory=dict)
+    retryable: bool = False
+    requires_human_action: bool = False
 
     def to_http(self) -> HTTPException:
         return HTTPException(
@@ -37,6 +41,11 @@ def conflict(message: str, hint: str = "", code: str = "conflict") -> ApiError:
 
 def not_found(message: str = "记录不存在") -> ApiError:
     return ApiError(404, message, "not_found")
+
+
+def tenant_denied(message: str = "无权访问该租户的数据") -> ApiError:
+    return ApiError(403, message, "tenant_access_denied",
+                    hint="数据受租户隔离保护，请确认访问范围")
 
 
 def provider_error(
