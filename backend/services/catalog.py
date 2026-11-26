@@ -432,6 +432,10 @@ def source_file(product_id: str, source_id: str) -> tuple[dict[str, Any], Path]:
             raise not_found("找不到该资料，或资料不属于该商品")
         source = _source(row)
     path = next(iter(config.uploads_dir().glob(source_id + ".*")), None)
+    if path is None:
+        # 兼容历史版本：旧资料可能按无扩展名保存
+        legacy = config.uploads_dir() / source_id
+        path = legacy if legacy.is_file() else None
     if path is None or not path.is_file():
         raise not_found("资料文件缺失，请重新上传")
     if path.stat().st_size != source["size"]:

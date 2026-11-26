@@ -92,6 +92,33 @@ def test_old_database_migrates_without_data_loss(tmp_path):
         assert client.get("/api/v1/products").json()["total"] == 1
 
 
+def test_legacy_source_without_extension_previews_after_migration(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from backend.main import create_app
+    from tests.helpers import make_png
+
+    data = tmp_path / "legacy-file"
+    with TestClient(create_app(data)) as first:
+        first.post("/api/v1/products", json={"id": "LG01", "name": "旧资料商品"})
+        source = upload(first, "LG01", "旧图.png", make_png((10, 20, 30)))
+
+    uploads = data / "uploads"
+    stored = next(path for path in uploads.iterdir() if path.stem == source["id"])
+    stored.rename(uploads / source["id"])
+    database = sqlite3.connect(data / "productflow.sqlite3")
+    database.execute("UPDATE sources SET size=0 WHERE id=?", (source["id"],))
+    database.commit()
+    database.close()
+
+    with TestClient(create_app(data)) as second:
+        preview = second.get(source["url"])
+        assert preview.status_code == 200
+        assert preview.content.startswith(b"\x89PNG")
+        detail = second.get("/api/v1/products/LG01").json()
+        assert detail["sources"][0]["size"] > 0
+
+
 def test_categories_and_sku(client):
     categories = client.get("/api/v1/categories").json()
     ids = {item["id"] for item in categories}

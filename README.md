@@ -38,7 +38,7 @@ frontend/
   main.tsx         # hash 路由入口
   api.ts           # REST 客户端
   pages/           # 工作台、商品、商品详情（7 个 tab）、批量导入、审核、资产库、工作室
-tests/             # pytest：32 项
+tests/             # pytest：33 项
 ```
 
 ## 数据目录与迁移
@@ -146,17 +146,17 @@ npm run dev
 ## 测试
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest tests -q     # 后端 32 项
+.\.venv\Scripts\python.exe -m pytest tests -q     # 后端 33 项
 npm run build                                      # tsc --noEmit + vite build
 ```
 
-覆盖：模型错误分类与 JSON 重试、草稿读回、重复编号、非法文件拦截、PDF/Excel/Word 解析与来源定位、等价单位、来源冲突、重复值、手动更正与依据、第二品类/SKU、批量导入逐条结果、素材视角持久化、策划事实约束与“纯羊毛/防水”拦截、策划编辑读回、生图（mock）、审核驳回到通过、下载权限、修订、视频真实 FFmpeg 合成与 ffprobe 校验（时长/画幅/编码）、版本变更定位受影响成品。
+覆盖：模型错误分类与 JSON 重试、草稿读回、重复编号、非法文件拦截、PDF/Excel/Word 解析与来源定位、旧版无扩展名资料迁移后可预览、等价单位、来源冲突、重复值、手动更正与依据、第二品类/SKU、批量导入逐条结果、素材视角持久化、策划事实约束与“纯羊毛/防水”拦截、策划编辑读回、生图（mock）、审核驳回到通过、下载权限、修订、视频真实 FFmpeg 合成与 ffprobe 校验（时长/画幅/编码）、版本变更定位受影响成品。
 
 ## 已实现 / 已测试 / 真实接口通过 / 待确认
 
 **已实现**：五阶段全部功能与页面入口；SQLite 幂等迁移；模型适配层与错误分类；PDF/Excel/Word/OCR 解析；候选来源定位校验；规则与版本；六视角素材；事实约束策划；FFmpeg 视频；审核交付；资产复用；批量导入；统计。
 
-**已测试**：上述 32 项 pytest；`npm run build`；浏览器验收商品详情、素材、策划、视频预览、审核通过与下载。
+**已测试**：上述 33 项 pytest；`npm run build`；浏览器验收商品详情、素材、策划、视频预览、审核通过与下载。
 
 **真实接口通过**：FFmpeg 真实合成 11.4s、720×1280、H.264、yuv420p 视频并经 ffprobe 与浏览器验证；真实文件解析（手写文字层 PDF/Excel/Word/PNG）。
 

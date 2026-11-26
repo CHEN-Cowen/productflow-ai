@@ -347,6 +347,9 @@ def _backfill(db: sqlite3.Connection) -> None:
     # 兼容旧数据：补齐历史资料的文件大小，保证预览时能校验原件完整性
     for row in db.execute("SELECT id, size FROM sources WHERE size=0").fetchall():
         candidate = next(iter(config.uploads_dir().glob(row["id"] + ".*")), None)
+        if candidate is None:
+            legacy = config.uploads_dir() / row["id"]
+            candidate = legacy if legacy.is_file() else None
         if candidate and candidate.is_file():
             db.execute("UPDATE sources SET size=? WHERE id=?", (candidate.stat().st_size, row["id"]))
     # 旧版 reference_tags 视角迁移到 sources.view_angle，保留旧表不删除
