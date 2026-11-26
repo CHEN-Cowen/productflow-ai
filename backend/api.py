@@ -27,6 +27,7 @@ class ProductIn(BaseModel):
     category_id: str = "BAG"
     brand: str = ""
     origin: str = ""
+    model: str = ""
     description: str = ""
 
 
@@ -35,6 +36,7 @@ class ProductPatch(BaseModel):
     category_id: str | None = None
     brand: str | None = None
     origin: str | None = None
+    model: str | None = None
     description: str | None = None
 
 

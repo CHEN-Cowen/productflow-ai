@@ -21,6 +21,8 @@ BAG: dict[str, Any] = {
          "required": False, "critical": True, "allowed_values": []},
         {"key": "color", "label": "颜色", "type": "text", "unit": "",
          "required": True, "critical": True, "allowed_values": []},
+        {"key": "selling_point", "label": "核心卖点", "type": "text", "unit": "",
+         "required": False, "critical": False, "allowed_values": []},
     ],
 }
 
@@ -40,6 +42,8 @@ APPAREL: dict[str, Any] = {
         {"key": "fit", "label": "版型", "type": "text", "unit": "",
          "required": False, "critical": False, "allowed_values": []},
         {"key": "care", "label": "洗涤方式", "type": "text", "unit": "",
+         "required": False, "critical": False, "allowed_values": []},
+        {"key": "selling_point", "label": "核心卖点", "type": "text", "unit": "",
          "required": False, "critical": False, "allowed_values": []},
     ],
 }

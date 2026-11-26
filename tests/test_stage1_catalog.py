@@ -184,3 +184,18 @@ def test_sku_update_and_delete(client):
     in_use = client.delete(f"/api/v1/products/SKU02/skus/{b.json()['id']}")
     assert in_use.status_code == 409
     assert error_code(in_use) == "sku_in_use"
+
+
+def test_product_model_field(client):
+    created = client.post("/api/v1/products", json={
+        "id": "MD01", "name": "型号测试", "category_id": "BAG", "model": "PB-200",
+    })
+    assert created.status_code == 201
+    assert created.json()["product"]["model"] == "PB-200"
+
+    read_back = client.get("/api/v1/products/MD01").json()
+    assert read_back["product"]["model"] == "PB-200"
+
+    updated = client.put("/api/v1/products/MD01", json={"model": "PB-300"})
+    assert updated.status_code == 200
+    assert updated.json()["product"]["model"] == "PB-300"

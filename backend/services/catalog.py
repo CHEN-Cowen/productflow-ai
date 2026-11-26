@@ -31,6 +31,7 @@ def _product(row: dict[str, Any]) -> dict[str, Any]:
         "category_id": row.get("category_id") or "BAG",
         "brand": row.get("brand") or "",
         "origin": row.get("origin") or "",
+        "model": row.get("model") or "",
         "description": row.get("description") or "",
         "status": row.get("status") or "draft",
         "created_at": row.get("created_at") or "",
@@ -143,10 +144,11 @@ def create_product(payload: dict[str, Any]) -> dict[str, Any]:
         if one(db, "SELECT 1 FROM products WHERE id=?", (product_id,)):
             raise conflict("该商品编号已存在，请使用新编号或打开既有商品", code="duplicate_product")
         db.execute(
-            "INSERT INTO products(id,tenant_id,name,category_id,brand,origin,description,status,created_at,updated_at) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO products(id,tenant_id,name,category_id,brand,origin,model,description,status,created_at,updated_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
             (product_id, tenants.current(), name, category_id, str(payload.get("brand") or "").strip(),
-             str(payload.get("origin") or "").strip(), str(payload.get("description") or "").strip(),
+             str(payload.get("origin") or "").strip(), str(payload.get("model") or "").strip(),
+             str(payload.get("description") or "").strip(),
              "draft", stamp, stamp),
         )
         return product_detail(db, product_id)
@@ -167,9 +169,10 @@ def update_product(product_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         category_id = str(payload.get("category_id", current["category_id"])).strip().upper()
         category(db, category_id)
         db.execute(
-            "UPDATE products SET name=?, category_id=?, brand=?, origin=?, description=?, updated_at=? WHERE id=?",
+            "UPDATE products SET name=?, category_id=?, brand=?, origin=?, model=?, description=?, updated_at=? WHERE id=?",
             (name, category_id, str(payload.get("brand", current["brand"]) or "").strip(),
              str(payload.get("origin", current["origin"]) or "").strip(),
+             str(payload.get("model", current["model"]) or "").strip(),
              str(payload.get("description", current["description"]) or "").strip(), now(), product_id),
         )
         return product_detail(db, product_id)

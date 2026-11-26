@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS products (
     category_id TEXT NOT NULL DEFAULT 'BAG',
     brand TEXT NOT NULL DEFAULT '',
     origin TEXT NOT NULL DEFAULT '',
+    model TEXT NOT NULL DEFAULT '',
     description TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'draft',
     created_at TEXT NOT NULL DEFAULT '',
@@ -342,6 +343,7 @@ MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("category_id", "TEXT NOT NULL DEFAULT 'BAG'"),
         ("brand", "TEXT NOT NULL DEFAULT ''"),
         ("origin", "TEXT NOT NULL DEFAULT ''"),
+        ("model", "TEXT NOT NULL DEFAULT ''"),
         ("description", "TEXT NOT NULL DEFAULT ''"),
         ("status", "TEXT NOT NULL DEFAULT 'draft'"),
         ("created_at", "TEXT NOT NULL DEFAULT ''"),
@@ -524,6 +526,23 @@ def _seed_categories(db: sqlite3.Connection) -> None:
                 (key, schema["category_name"], 1, dumps(schema), 1, stamp, stamp),
             )
         row = one(db, "SELECT version, schema_json FROM categories WHERE id=?", (key,))
+        if row:
+            current = loads(row["schema_json"], {})
+            current_attrs = {attr.get("key") for attr in current.get("attributes", []) if isinstance(attr, dict)}
+            missing_attrs = [attr for attr in schema["attributes"] if attr.get("key") not in current_attrs]
+            if missing_attrs:
+                merged = dict(current)
+                merged["attributes"] = list(current.get("attributes", [])) + missing_attrs
+                new_version = (row["version"] or 1) + 1
+                db.execute(
+                    "UPDATE categories SET schema_json=?, version=?, updated_at=? WHERE id=?",
+                    (dumps(merged), new_version, stamp, key),
+                )
+                db.execute(
+                    "INSERT INTO category_versions(category_id,version,schema_json,created_at) VALUES(?,?,?,?)",
+                    (key, new_version, dumps(merged), stamp),
+                )
+                row = {"version": new_version, "schema_json": dumps(merged)}
         if row and not one(
             db, "SELECT 1 FROM category_versions WHERE category_id=? AND version=?",
             (key, row["version"]),

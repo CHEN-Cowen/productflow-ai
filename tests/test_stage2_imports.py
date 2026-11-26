@@ -301,3 +301,19 @@ def test_confirm_records_operator(client, mock_llm):
     provenance = client.get("/api/v1/products/GOV09").json()["latest_version"]["provenance"]
     assert provenance["body_material"]["confirmed_by"] == "reviewer-a"
     assert provenance["body_material"]["confirmed_at"]
+
+
+def test_selling_point_field_extract_confirm(client, mock_llm):
+    client.post("/api/v1/products", json={"id": "GOV10", "name": "卖点测试"})
+    lines = list(LINES) + ["Selling Point: lightweight and durable for commute"]
+    items = ITEMS + [{"field": "selling_point", "block_id": 0,
+                      "quote": "Selling Point: lightweight and durable for commute",
+                      "value": "lightweight and durable for commute"}]
+    _, detail = _extract(client, mock_llm, "GOV10", lines, items, name="卖点.pdf")
+    assert detail["candidates"]["selling_point"][0]["value"] == "lightweight and durable for commute"
+
+    result = confirm_fields(client, detail["id"], {**FIELDS, "selling_point": "lightweight and durable for commute"})
+    assert result["version"] == 1
+    provenance = client.get("/api/v1/products/GOV10").json()["latest_version"]["provenance"]
+    assert provenance["selling_point"]["source_name"] == "卖点.pdf"
+    assert provenance["selling_point"]["status"] == "verified"

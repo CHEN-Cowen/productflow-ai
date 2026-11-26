@@ -117,6 +117,7 @@ function OverviewTab({ productId, detail, runs, reload }: TabProps) {
   const [form, setForm] = useState({
     name: detail.product.name, category_id: detail.product.category_id,
     brand: detail.product.brand, origin: detail.product.origin,
+    model: detail.product.model || "",
     description: detail.product.description,
   });
   const [busy, setBusy] = useState("");
@@ -222,6 +223,7 @@ function OverviewTab({ productId, detail, runs, reload }: TabProps) {
             <option value={detail.category.id}>{detail.category.name}</option>
           </select></Field>
           <Field label="品牌"><input value={form.brand} onChange={(event) => setForm({ ...form, brand: event.target.value })} /></Field>
+          <Field label="型号"><input value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} /></Field>
           <Field label="产地"><input value={form.origin} onChange={(event) => setForm({ ...form, origin: event.target.value })} /></Field>
           <Field label="备注"><input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></Field>
         </div>

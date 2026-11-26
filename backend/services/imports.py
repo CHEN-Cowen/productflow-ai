@@ -390,7 +390,7 @@ def batch_import(rows_input: list[dict[str, Any]]) -> dict[str, Any]:
                     "id": product_id, "name": item.get("name") or product_id,
                     "category_id": category_id,
                     "brand": item.get("brand") or "", "origin": item.get("origin") or "",
-                    "description": item.get("description") or "",
+                    "model": item.get("model") or "", "description": item.get("description") or "",
                 })
             elif product["category_id"] != category_id:
                 raise conflict("商品已存在且品类不同，请先核对", code="category_conflict")
