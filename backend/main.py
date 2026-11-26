@@ -8,6 +8,8 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from .workflow import register_workflow
+
 app = FastAPI(title="ProductFlow AI")
 root = Path(os.environ.get("PRODUCTFLOW_DATA", Path(__file__).resolve().parent.parent / "data"))
 uploads = root / "uploads"
@@ -64,7 +66,11 @@ def get_product(product_id: str):
         sources = db.execute(
             "SELECT id, name, mime FROM sources WHERE product_id = ? ORDER BY rowid", (product_id,)
         ).fetchall()
-    return {**dict(product), "status": "draft", "sources": [dict(row) for row in sources]}
+        approved = db.execute(
+            "SELECT 1 FROM product_versions WHERE product_id = ?", (product_id,)
+        ).fetchone()
+    return {**dict(product), "status": "approved" if approved else "draft",
+            "sources": [dict(row) for row in sources]}
 
 
 @app.post("/api/v1/products/{product_id}/sources", status_code=201)
@@ -106,3 +112,6 @@ def get_source(product_id: str, source_id: str):
         uploads / source_id, media_type=source["mime"], filename=source["name"],
         content_disposition_type="inline", headers={"X-Content-Type-Options": "nosniff"},
     )
+
+
+register_workflow(app, connection, uploads)

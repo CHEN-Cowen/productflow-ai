@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
+import { Workflow } from "./workflow";
 
 type Source = { id: string; name: string; mime: string };
-type Product = { id: string; name: string; sources: Source[] };
+type Product = { id: string; name: string; status: string; sources: Source[] };
 const endpoint = "/api/v1/products";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
@@ -88,7 +89,7 @@ function App() {
       <button>保存草稿</button>
     </form>)}
     {product && <>
-      <section><h2>{product.name}</h2><p>{product.id} · 草稿</p></section>
+      <section><h2>{product.name}</h2><p>{product.id}</p><a href="/">新建其他商品</a></section>
       <section>
         <h2>原始资料</h2>
         <form className="upload" onSubmit={(event) => upload(event, product)}>
@@ -108,6 +109,7 @@ function App() {
             <img src={previewUrl} alt={preview.name} />}
         </div>}
       </section>
+      <Workflow key={product.id} product={product} />
     </>}
   </main>;
 }
