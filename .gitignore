@@ -27,3 +27,6 @@ ProductFlow-AI-Coding-Prompt.md
 test-results/
 .coverage
 htmlcov/
+
+# 前端分享打包临时产物
+.trae-html-share-packages/

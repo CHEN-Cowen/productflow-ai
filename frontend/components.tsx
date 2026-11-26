@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { api, angleLabel, errorText, formatSize, formatTime, statusLabel } from "./api";
-import { Badge, ErrorBox, statusTone } from "./ui";
+import { Badge, ErrorBox, Modal, statusTone } from "./ui";
 
 export function RunSteps({ run }: { run: any }) {
   return (
     <div className="stack" style={{ gap: 6 }}>
       <div className="row gap wrap">
         <Badge tone={statusTone(run.status)}>{statusLabel(run.status)}</Badge>
-        <span className="muted small">{run.workflow_type}</span>
+        <span className="muted small">{({ image_generation: "图片生产", video_generation: "视频生产", content_planning: "内容策划" } as Record<string, string>)[run.workflow_type] || "资料处理"}</span>
         <span className="muted small">{formatTime(run.created_at)}</span>
       </div>
       <div className="steps">
@@ -35,6 +35,7 @@ export function OutputCard({
   allowDownload?: boolean;
 }) {
   const [note, setNote] = useState("");
+  const [previewing, setPreviewing] = useState(false);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState<unknown>(null);
   const [revising, setRevising] = useState(false);
@@ -74,13 +75,10 @@ export function OutputCard({
 
   return (
     <div className="asset-card">
-      <div className="media-frame">
-        {output.kind === "video" ? (
-          <video src={output.url} controls preload="metadata" style={{ maxHeight: 360 }} />
-        ) : (
-          <img src={output.url} alt={output.kind} style={{ maxHeight: 360 }} />
-        )}
-      </div>
+      <button type="button" className="media-frame media-preview" aria-label={`预览${output.product_name}${output.kind === "video" ? "视频" : "图片"}`} onClick={() => setPreviewing(true)}>
+        {output.kind === "video" ? <><video src={output.url} muted preload="metadata"/><span className="play-overlay" aria-hidden="true">▷</span></> : <img src={output.url} alt={output.product_name}/>}
+      </button>
+      {previewing && <Modal title={output.product_name + (output.kind === "video" ? " · 视频" : " · 图片")} onClose={() => setPreviewing(false)}><div className="media-frame">{output.kind === "video" ? <video src={output.url} controls autoPlay preload="metadata"/> : <img src={output.url} alt={output.product_name}/>}</div></Modal>}
       <div className="row gap wrap">
         <Badge tone="accent">{output.kind === "video" ? "短视频" : "商品图"}</Badge>
         <Badge tone={statusTone(output.status)}>{statusLabel(output.status)}</Badge>
@@ -97,7 +95,7 @@ export function OutputCard({
             {output.params?.duration} 秒 · {output.params?.width}×{output.params?.height} · {output.params?.codec}
           </div>
         )}
-        <div className="muted">模型：{output.model || output.provider || "—"} · {formatTime(output.created_at)}</div>
+        <details><summary>生成信息</summary><div className="muted">{output.model || output.provider || "—"} · {formatTime(output.created_at)}</div><div className="muted">来源素材：{output.sources?.map((item: any) => `${item.name}（${angleLabel(item.view_angle)}）`).join("、") || "—"}</div></details>
         {output.needs_review && <div className="muted">{output.stale_reason}</div>}
       </div>
       {output.note && <div className="small muted">审核备注：{output.note}</div>}
@@ -142,9 +140,7 @@ export function OutputCard({
           )}
         </div>
       )}
-      <div className="muted small">
-        来源素材：{output.sources?.map((item: any) => `${item.name}（${angleLabel(item.view_angle)}）`).join("、") || "—"}
-      </div>
+
     </div>
   );
 }

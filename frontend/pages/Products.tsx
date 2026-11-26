@@ -1,12 +1,13 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../api";
-import { Badge, ErrorBox, Field, Loading, Section, statusTone } from "../ui";
+import { Badge, ErrorBox, Field, Loading, Modal, Section, statusTone } from "../ui";
 import { navigate, productPath } from "../router";
 
-export default function Products() {
+export default function Products({ initialSearch = "" }: { initialSearch?: string }) {
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
+  const [showCreate, setShowCreate] = useState(false);
   const [filter, setFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
@@ -34,7 +35,7 @@ export default function Products() {
     }
   }
 
-  useEffect(() => { load(); }, [filter]);
+  useEffect(() => { const timer = setTimeout(() => { void load(); }, 250); return () => clearTimeout(timer); }, [filter, search]);
 
   async function create(event: FormEvent) {
     event.preventDefault();
@@ -52,15 +53,9 @@ export default function Products() {
 
   return (
     <>
-      <div className="topbar">
-        <div>
-          <div className="crumbs">商品数据中心</div>
-          <h1>商品档案</h1>
-          <p className="page-sub">先建草稿，再上传原始资料；商品编号唯一，重复编号会被拦截。</p>
-        </div>
-      </div>
+      <div className="row between mb"><h2>全部商品</h2><button className="btn" onClick={() => setShowCreate(true)}>＋ 新建商品</button></div>
 
-      <Section title="新建商品草稿" subtitle="必填：商品编号、名称、品类。编号创建后作为主键，不建议修改。">
+      {showCreate && <Modal title="新建商品" onClose={() => setShowCreate(false)}>
         <form onSubmit={create}>
           <div className="form-grid">
             <Field label="商品编号" required hint="1-32 位大写字母、数字或短横线，例如 BP01">
@@ -91,7 +86,7 @@ export default function Products() {
             </button>
           </div>
         </form>
-      </Section>
+      </Modal>}
 
       <Section title={`商品列表（${products.length}）`}
                actions={
@@ -111,7 +106,7 @@ export default function Products() {
         {loading ? <Loading /> : error ? <ErrorBox error={error} onRetry={load} /> : products.length === 0 ? (
           <div className="empty"><div className="empty-title">没有匹配的商品</div><div className="muted small">调整搜索条件或新建商品</div></div>
         ) : (
-          <table>
+          <div className="table-wrap"><table>
             <thead>
               <tr><th>商品编号</th><th>名称</th><th>品类</th><th>资料</th><th>版本</th><th>策划</th><th>成品</th><th>状态</th><th>更新时间</th><th></th></tr>
             </thead>
@@ -131,7 +126,7 @@ export default function Products() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
         {error !== null && !loading && <div className="mt"><ErrorBox error={error} onRetry={load} /></div>}
       </Section>

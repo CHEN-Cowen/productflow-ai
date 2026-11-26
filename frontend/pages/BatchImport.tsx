@@ -5,8 +5,8 @@ import { navigate, productPath } from "../router";
 
 const SAMPLE = JSON.stringify([
   {
-    product_id: "BATCH-DEMO-1",
-    name: "批量导入演示双肩包",
+    product_id: "BP01",
+    name: "女士双肩包",
     category_id: "BAG",
     fields: {
       body_material: "羊毛 70%、聚酯纤维 30%",
@@ -15,12 +15,7 @@ const SAMPLE = JSON.stringify([
       color: "暖米白",
     },
   },
-  {
-    product_id: "BATCH-DEMO-2",
-    name: "批量导入演示开衫",
-    category_id: "APPAREL",
-    fields: { fabric: "棉 80%、羊毛 20%", size: "M", color: "米白" },
-  },
+
 ], null, 2);
 
 export default function BatchImport() {
@@ -72,14 +67,6 @@ export default function BatchImport() {
 
   return (
     <>
-      <div className="topbar">
-        <div>
-          <div className="crumbs">数据导入</div>
-          <h1>跨商品批量导入</h1>
-          <p className="page-sub">逐行处理并保留成功与失败原因；同批次重复编号、字段缺失或类型错误进入异常队列。</p>
-        </div>
-      </div>
-
       <Section title="粘贴或上传数据" subtitle="JSON 行数组，或 CSV（表头 product_id,name,category_id,sku,fields；fields 为 JSON）">
         <div className="row gap mb">
           <label className="row gap small"><input type="radio" checked={mode === "json"} onChange={() => { setMode("json"); setText(SAMPLE); }} /> JSON</label>

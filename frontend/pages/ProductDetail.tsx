@@ -16,7 +16,7 @@ const TABS = [
   { key: "versions", label: "版本与影响" },
 ];
 
-export default function ProductDetail({ productId, tab }: { productId: string; tab: string }) {
+export default function ProductDetail({ productId, tab, embedded = false, productionKind }: { productId: string; tab: string; embedded?: boolean; productionKind?: "image" | "video" }) {
   const [detail, setDetail] = useState<any>(null);
   const [models, setModels] = useState<any>(null);
   const [importsList, setImportsList] = useState<any[]>([]);
@@ -66,9 +66,9 @@ export default function ProductDetail({ productId, tab }: { productId: string; t
 
   return (
     <>
-      <div className="topbar">
+      {!embedded && <div className="topbar">
         <div>
-          <div className="crumbs"><a href="#/products">商品数据中心</a> / {detail.product.id}</div>
+          <div className="crumbs"><a href="#/products">商品库</a> / {detail.product.id}</div>
           <h1>{detail.product.name}</h1>
           <div className="row gap wrap mt">
             <Badge tone="accent">{detail.category.name} v{detail.category.version}</Badge>
@@ -87,26 +87,26 @@ export default function ProductDetail({ productId, tab }: { productId: string; t
           <button className="btn btn-small btn-ghost" onClick={() => goTab("plans")}>内容策划</button>
           <button className="btn btn-small btn-ghost" onClick={() => goTab("quality")}>审核成品</button>
         </div>
-      </div>
+      </div>}
 
-      <div className="grid four">
+      {!embedded && <div className="grid four">
         <div className="stat"><div className="stat-label">资料</div><div className="stat-value">{detail.counts.sources}</div><div className="muted small">{detail.sources.filter((item: any) => item.kind === "image").length} 图 · {detail.sources.filter((item: any) => item.kind === "document").length} 文档</div></div>
         <div className="stat"><div className="stat-label">必填完整度</div><div className="stat-value">{detail.completeness.required_filled}/{detail.completeness.required_total}</div><div className="muted small">{detail.completeness.missing.length ? `待补：${detail.completeness.missing.join("、")}` : "已齐全"}</div></div>
         <div className="stat"><div className="stat-label">策划</div><div className="stat-value">{detail.counts.plans}</div><div className="muted small">已确认 {plans.filter((plan) => plan.status === "confirmed").length}</div></div>
         <div className="stat"><div className="stat-label">成品 / 待审核</div><div className="stat-value">{detail.counts.outputs}</div><div className="muted small">{detail.counts.pending_reviews} 个待审核</div></div>
-      </div>
+      </div>}
 
-      <div className="tabs mt">
+      {!embedded && <div className="tabs mt">
         {TABS.map((item) => (
           <button key={item.key} className={tab === item.key ? "active" : ""} onClick={() => goTab(item.key)}>{item.label}</button>
         ))}
-      </div>
+      </div>}
 
       {tab === "overview" && <OverviewTab {...props} />}
       {tab === "docs" && <DocsTab {...props} />}
       {tab === "assets" && <AssetsTab {...props} />}
       {tab === "plans" && <PlansTab {...props} />}
-      {tab === "production" && <ProductionTab {...props} />}
+      {tab === "production" && <ProductionTab {...props} productionKind={productionKind} />}
       {tab === "quality" && <QualityTab {...props} />}
       {tab === "versions" && <VersionsTab {...props} />}
     </>

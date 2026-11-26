@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ANGLES, PURPOSES, angleLabel, api, formatSize, formatTime, statusLabel } from "../api";
 import { Badge, Empty, ErrorBox, Field, Loading, Section, statusTone } from "../ui";
 import { OutputCard } from "../components";
@@ -12,6 +12,10 @@ export default function Library() {
   const [error, setError] = useState<unknown>(null);
   const [filters, setFilters] = useState({ status: "approved", kind: "", product_id: "", search: "", angle: "", review_status: "" });
 
+  const requestId = useRef(0);
+  const resultKey = JSON.stringify([tab, filters]);
+  const [loadedKey, setLoadedKey] = useState("");
+
   async function loadProducts() {
     try {
       const data = await api.get("/products");
@@ -22,6 +26,7 @@ export default function Library() {
   }
 
   async function load() {
+    const request = ++requestId.current;
     setLoading(true);
     setError(null);
     try {
@@ -32,7 +37,7 @@ export default function Library() {
         if (filters.product_id) query.set("product_id", filters.product_id);
         if (filters.search) query.set("search", filters.search);
         const data = await api.get(`/library/outputs?${query.toString()}`);
-        setItems(data.items);
+        if (request === requestId.current) { setItems(data.items); setLoadedKey(resultKey); }
       } else {
         const query = new URLSearchParams();
         if (filters.product_id) query.set("product_id", filters.product_id);
@@ -40,25 +45,24 @@ export default function Library() {
         if (filters.review_status) query.set("review_status", filters.review_status);
         if (filters.search) query.set("search", filters.search);
         const data = await api.get(`/assets/sources?${query.toString()}`);
-        setItems(data.items);
+        if (request === requestId.current) { setItems(data.items); setLoadedKey(resultKey); }
       }
     } catch (err) {
-      setError(err);
+      if (request === requestId.current) { setError(err); setLoadedKey(resultKey); }
     } finally {
-      setLoading(false);
+      if (request === requestId.current) setLoading(false);
     }
   }
 
   useEffect(() => { loadProducts(); }, []);
-  useEffect(() => { load(); }, [tab, filters.status, filters.kind, filters.product_id, filters.angle, filters.review_status]);
+  useEffect(() => { const timer = setTimeout(() => { void load(); }, 250); return () => clearTimeout(timer); }, [tab, filters.status, filters.kind, filters.product_id, filters.angle, filters.review_status, filters.search]);
 
   return (
     <>
       <div className="topbar">
         <div>
-          <div className="crumbs">资产库</div>
-          <h1>可复用资产</h1>
-          <p className="page-sub">按状态、类型、商品、视角筛选；查看版本与来源，审核通过的成品可直接下载。</p>
+
+          <h1>内容资产库</h1>
         </div>
         <div className="toolbar">
           <button className="btn btn-small btn-ghost" onClick={() => navigate("/studio")}>内容生产</button>
@@ -66,8 +70,8 @@ export default function Library() {
       </div>
 
       <div className="tabs">
-        <button className={tab === "outputs" ? "active" : ""} onClick={() => setTab("outputs")}>成品资产</button>
-        <button className={tab === "sources" ? "active" : ""} onClick={() => setTab("sources")}>参考素材</button>
+        <button className={tab === "outputs" ? "active" : ""} onClick={() => { requestId.current++; setTab("outputs"); }}>生成内容</button>
+        <button className={tab === "sources" ? "active" : ""} onClick={() => { requestId.current++; setTab("sources"); }}>参考素材</button>
       </div>
 
       <Section title="筛选" subtitle={tab === "outputs" ? "默认仅显示已通过审核的正式交付成品" : "原始素材保留关联商品、视角、用途与审核状态"}>
@@ -113,14 +117,14 @@ export default function Library() {
                    onChange={(event) => setFilters({ ...filters, search: event.target.value })}
                    onKeyDown={(event) => { if (event.key === "Enter") load(); }} />
           </Field>
-          <button className="btn btn-small" onClick={load}>刷新</button>
+          <button className="btn btn-small" onClick={load}>查询</button>
         </div>
       </Section>
 
-      {loading ? <Loading /> : error ? <ErrorBox error={error} onRetry={load} /> : items.length === 0 ? (
+      {loading || loadedKey !== resultKey ? <Loading /> : error ? <ErrorBox error={error} onRetry={load} /> : items.length === 0 ? (
         <Section title="资产"><Empty title="当前筛选下没有资产" hint={tab === "outputs" ? "成品通过审核后会进入资产库" : "上传参考图并完成视角标注"} /></Section>
       ) : tab === "outputs" ? (
-        <div className="grid two">
+        <div className="grid asset-grid">
           {items.map((output: any) => (
             <div key={output.id} className="stack" style={{ gap: 8 }}>
               <OutputCard output={output} allowReview={false} allowDownload />
@@ -135,7 +139,7 @@ export default function Library() {
         <div className="grid auto">
           {items.map((source: any) => (
             <div className="asset-card" key={source.id}>
-              <img className="thumb" src={source.url} alt={source.name} />
+              {source.kind === "image" ? <img className="thumb" src={source.url} alt={source.name} /> : <div className="thumb document-thumb">文档</div>}
               <div className="strong ellipsis" title={source.name}>{source.name}</div>
               <div className="row gap wrap">
                 <Badge tone={source.view_angle ? "success" : "warn"}>{angleLabel(source.view_angle)}</Badge>
@@ -145,7 +149,7 @@ export default function Library() {
               <div className="muted small">{source.product_id} · {source.product_name}</div>
               <div className="muted small">{PURPOSES.find((item) => item.value === source.purpose)?.label || source.purpose} · {formatTime(source.created_at)}</div>
               <div className="toolbar">
-                <a className="btn btn-small btn-ghost" href={source.url} target="_blank" rel="noreferrer">预览原图</a>
+                <a className="btn btn-small btn-ghost" href={source.url} target="_blank" rel="noreferrer">{source.kind === "image" ? "预览原图" : "查看资料"}</a>
                 <a className="btn btn-small btn-ghost" href={`#${productPath(source.product_id, "assets")}`}>管理素材</a>
               </div>
             </div>

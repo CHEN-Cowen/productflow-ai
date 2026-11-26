@@ -6,6 +6,7 @@ import { fieldLabels, locatorText, planTemplate } from "../product-utils";
 import { navigate, productPath } from "../router";
 
 export type TabProps = {
+  productionKind?: "image" | "video";
   productId: string;
   detail: any;
   models: any;
@@ -846,7 +847,7 @@ function PlanCard({ plan, detail, outputs, reload, goTab }: {
 /* ---------------- 生产 ---------------- */
 
 export function ProductionTab(props: TabProps) {
-  const { detail, plans, outputs, runs, reload } = props;
+  const { detail, plans, outputs, runs, reload, productionKind } = props;
   const confirmed = plans.filter((plan: any) => plan.status === "confirmed");
   const [selectedId, setSelectedId] = useState("");
   useEffect(() => {
@@ -879,7 +880,7 @@ export function ProductionTab(props: TabProps) {
     return () => window.clearInterval(timer);
   }, [busy]);
 
-  const planOutputs = outputs.filter((output: any) => output.plan_id === selectedId);
+  const planOutputs = outputs.filter((output: any) => output.plan_id === selectedId && (!productionKind || output.kind === productionKind));
   const approvedImages = outputs.filter((output: any) =>
     output.kind === "image" && output.status === "approved" && !output.needs_review);
   const allMaterials = [
@@ -901,7 +902,7 @@ export function ProductionTab(props: TabProps) {
       const result = await api.post(`/plans/${plan.id}/outputs/${kind}`, body);
       setMessage(kind === "image"
         ? `已生成 ${result.outputs.length} 张候选（尝试 ${result.attempts} 次），进入待审核队列`
-        : `视频已合成并通过 ffprobe 校验，进入待审核队列`);
+        : `视频已生成，进入待审核队列`);
       await reload();
     } catch (err) {
       setError(err);
@@ -929,8 +930,8 @@ export function ProductionTab(props: TabProps) {
         {plan && (
           <>
             <div className="muted small mb">商品版本 v{plan.version} · {plan.is_current_version ? "当前版本" : "非当前版本，不能生产"} · 分镜 {(plan.content.shots || []).length} 个</div>
-            <div className="grid two">
-              <div>
+            <div className={productionKind ? "stack" : "grid two"}>
+              {productionKind !== "video" && <div>
                 <div className="strong mb">生成商品图</div>
                 <Field label="提示词" required><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} /></Field>
                 <div className="form-grid mt">
@@ -944,11 +945,11 @@ export function ProductionTab(props: TabProps) {
                 <div className="form-actions">
                   <button className="btn" disabled={!!busy || !plan.is_current_version || !prompt.trim()}
                           onClick={() => generate("image")}>
-                    {busy === "image" ? `生成中… ${elapsed}s` : "调用真实生图"}
+                    {busy === "image" ? `生成中… ${elapsed}s` : "生成商品图"}
                   </button>
                 </div>
-              </div>
-              <div>
+              </div>}
+              {productionKind !== "image" && <div>
                 <div className="strong mb">合成竖版短视频</div>
                 <div className="muted small mb">使用已审核商品图或原始参考图作为镜头素材；成品约 12 秒、720×1280。</div>
                 <div className="stack" style={{ gap: 6 }}>
@@ -968,7 +969,7 @@ export function ProductionTab(props: TabProps) {
                     {busy === "video" ? `合成中… ${elapsed}s` : "合成 12 秒视频"}
                   </button>
                 </div>
-              </div>
+              </div>}
             </div>
             {error !== null && <div className="mt"><ErrorBox error={error} /></div>}
             {message && <div className="notice notice-success mt">{message}</div>}
@@ -984,13 +985,13 @@ export function ProductionTab(props: TabProps) {
         )}
       </Section>
 
-      <Section title="工作流执行记录" subtitle="节点状态、失败类别与耗时均来自实际执行">
+      <details className="card"><summary>执行记录</summary>
         {runs.length === 0 ? <Empty title="暂无执行记录" /> : (
           <div className="stack">
-            {runs.slice(0, 6).map((run: any) => <RunSteps key={run.id} run={run} />)}
+            {runs.filter((run: any) => !productionKind || run.workflow_type === `${productionKind}_generation`).slice(0, 6).map((run: any) => <RunSteps key={run.id} run={run} />)}
           </div>
         )}
-      </Section>
+      </details>
     </>
   );
 }

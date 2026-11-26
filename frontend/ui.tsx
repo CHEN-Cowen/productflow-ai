@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { ApiError } from "./api";
 
 export function Badge({ tone = "default", children }: { tone?: string; children: React.ReactNode }) {
@@ -42,7 +42,7 @@ export function Empty({ title, hint }: { title: string; hint?: string }) {
   return (
     <div className="empty">
       <div className="empty-title">{title}</div>
-      {hint && <div className="muted small">{hint}</div>}
+      {hint && <div className="muted">{hint}</div>}
     </div>
   );
 }
@@ -65,7 +65,7 @@ export function Section({
       <header className="card-head">
         <div>
           <h2>{title}</h2>
-          {subtitle && <p className="muted small">{subtitle}</p>}
+
         </div>
         {actions && <div className="row gap">{actions}</div>}
       </header>
@@ -89,7 +89,7 @@ export function Field({
     <label className="field">
       <span className="field-label">
         {label}
-        {required ? <em className="required">必填</em> : <span className="muted small">选填</span>}
+        {required ? <em className="required" aria-label="必填">*</em> : null}
       </span>
       {children}
       {hint && <span className="muted small">{hint}</span>}
@@ -109,4 +109,10 @@ export function Stat({ label, value, hint }: { label: string; value: React.React
 
 export function Notice({ tone = "info", children }: { tone?: string; children: React.ReactNode }) {
   return <div className={`notice notice-${tone}`}>{children}</div>;
+}
+
+export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => { const dialog = ref.current!; dialog.showModal(); return () => dialog.close(); }, []);
+  return <dialog ref={ref} className="modal" aria-label={title} onCancel={event => { event.preventDefault(); onClose(); }} onClick={event => { if(event.target===ref.current)onClose(); }}><div className="modal-content"><div className="row between gap mb"><h2>{title}</h2><button type="button" className="btn btn-ghost btn-small" aria-label="关闭弹窗" onClick={onClose}>✕</button></div>{children}</div></dialog>;
 }

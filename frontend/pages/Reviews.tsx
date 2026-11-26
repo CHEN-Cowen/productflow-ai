@@ -33,12 +33,12 @@ export default function Reviews() {
     <>
       <div className="topbar">
         <div>
-          <div className="crumbs">质量审核</div>
-          <h1>成品审核队列</h1>
-          <p className="page-sub">核对参考图与成品；驳回必须写明原因，未通过不得正式下载，不合格结果保留复盘。</p>
+
+          <h1>质量与交付</h1>
         </div>
       </div>
 
+      <div className="tabs"><button className={status === "pending" ? "active" : ""} onClick={() => setStatus("pending")}>待审核</button><button className={status === "approved" ? "active" : ""} onClick={() => setStatus("approved")}>已通过 / 交付</button><button className={status === "rejected" ? "active" : ""} onClick={() => setStatus("rejected")}>需修改</button></div>
       <Section title="筛选" subtitle="待审核 → 通过/驳回；商品版本更新后旧成品自动进入待复审">
         <div className="filters">
           <Field label="审核状态">
@@ -65,7 +65,7 @@ export default function Reviews() {
       {loading ? <Loading /> : error ? <ErrorBox error={error} onRetry={load} /> : items.length === 0 ? (
         <Section title="队列"><Empty title="当前筛选下没有成品" hint="生成图片或视频后会出现在这里" /></Section>
       ) : (
-        <div className="stack">
+        <div className="grid asset-grid">
           {items.map((output: any) => (
             <Section key={output.id}
                      title={`${output.kind === "video" ? "短视频" : "商品图"} · ${output.product_name}`}

@@ -2,83 +2,78 @@ import { useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
 import { api } from "./api";
-import { useHashRoute } from "./router";
+import { navigate, useHashRoute } from "./router";
 import Dashboard from "./pages/Dashboard";
-import Products from "./pages/Products";
+import Catalog from "./pages/Catalog";
 import ProductDetail from "./pages/ProductDetail";
-import BatchImport from "./pages/BatchImport";
 import Reviews from "./pages/Reviews";
 import Library from "./pages/Library";
 import Studio from "./pages/Studio";
+import Tasks from "./pages/Tasks";
 
-const NAV = [
-  { path: "/", label: "工作台", match: (path: string) => path === "/" },
-  { path: "/products", label: "商品数据中心", match: (path: string) => path.startsWith("/products") },
-  { path: "/imports", label: "数据导入", match: (path: string) => path.startsWith("/imports") },
-  { path: "/studio", label: "内容生产", match: (path: string) => path.startsWith("/studio") },
-  { path: "/reviews", label: "质量审核", match: (path: string) => path.startsWith("/reviews") },
-  { path: "/library", label: "资产库", match: (path: string) => path.startsWith("/library") },
-];
-
-function App() {
-  const route = useHashRoute();
-  const [pending, setPending] = useState<number | null>(null);
-
-  useEffect(() => {
-    api.get("/stats").then((stats) => setPending(stats.review.pending)).catch(() => setPending(null));
-  }, [route.path]);
-
-  let page: ReactNode;
-  if (route.segments.length === 0) {
-    page = <Dashboard />;
-  } else if (route.segments[0] === "products" && route.segments[1]) {
-    page = <ProductDetail productId={decodeURIComponent(route.segments[1])}
-                          tab={route.params.get("tab") || "overview"} />;
-  } else if (route.segments[0] === "products") {
-    page = <Products />;
-  } else if (route.segments[0] === "imports") {
-    page = <BatchImport />;
-  } else if (route.segments[0] === "reviews") {
-    page = <Reviews />;
-  } else if (route.segments[0] === "library") {
-    page = <Library />;
-  } else if (route.segments[0] === "studio") {
-    page = <Studio />;
-  } else {
-    page = (
-      <div className="card">
-        <h2>页面不存在</h2>
-        <p className="muted">请从左侧导航进入。</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">P</div>
-          <div className="brand-name">ProductFlow AI</div>
-        </div>
-        <div className="brand-sub">商品数据治理 · AI 内容生产</div>
-        <nav className="nav">
-          {NAV.map((item) => (
-            <a key={item.path} href={`#${item.path}`} className={item.match(route.path) ? "active" : ""}>
-              <span>{item.label}</span>
-              {item.path === "/reviews" && pending !== null && pending > 0 && <span className="nav-count">{pending}</span>}
-            </a>
-          ))}
-        </nav>
-        <div className="sidebar-foot">
-          <div><span className="dot">●</span> 本地模块化单体</div>
-          <div>React + FastAPI + SQLite</div>
-          <div>业务前缀 /api/v1</div>
-          <div className="mt">密钥只由后端读取；<br />真实接口未配置时显示可行动错误。</div>
-        </div>
-      </aside>
-      <main className="main">{page}</main>
-    </div>
-  );
+function Icon({name}:{name:string}) {
+  const paths:Record<string,ReactNode>={
+    home:<><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18M9 10h12"/></>,
+    products:<path d="m12 3 9 5-9 5-9-5 9-5ZM3 8v9l9 5 9-5V8M12 13v9"/>,
+    factory:<path d="m12 2 2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5L12 2Z"/>,
+    plan:<><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></>,
+    image:<><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1.5"/><path d="m3 17 6-6 4 4 3-3 5 5"/></>,
+    video:<><rect x="3" y="4" width="18" height="16" rx="3"/><path d="m10 8 6 4-6 4V8Z"/></>,
+    tasks:<><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,
+    assets:<><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></>,
+    reviews:<><rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 12 3 3 5-6"/></>
+  };
+  return <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
-
-createRoot(document.getElementById("root")!).render(<App />);
+const FACTORY=[
+  {path:"/studio/plans",label:"内容策划",icon:"plan"},
+  {path:"/studio/image",label:"图片生产",icon:"image"},
+  {path:"/studio/video",label:"视频生产",icon:"video"},
+  {path:"/tasks",label:"生产任务",icon:"tasks"}
+];
+function App(){
+  const route=useHashRoute();
+  const factoryActive=route.path.startsWith("/studio")||route.path==="/tasks";
+  const [factoryOpen,setFactoryOpen]=useState(factoryActive);
+  const [mobileOpen,setMobileOpen]=useState(false);
+  const [pending,setPending]=useState<number|null>(null);
+  const [search,setSearch]=useState("");
+  useEffect(()=>{setMobileOpen(false);if(factoryActive)setFactoryOpen(true)},[route.hash]);
+  useEffect(()=>{
+    let active=true;
+    api.get("/stats").then(s=>{if(active)setPending(s.review.pending)}).catch(()=>{if(active)setPending(null)});
+    return ()=>{active=false};
+  },[route.hash]);
+  function nav(path:string,label:string,icon:string,active:boolean){
+    return <a href={"#"+path} className={active?"active":""} aria-current={active?"page":undefined}><Icon name={icon}/><span className="grow">{label}</span>{path==="/reviews"&&pending!==null&&pending>0&&<span className="nav-count">{pending}</span>}</a>;
+  }
+  let page:ReactNode;
+  if(!route.segments.length)page=<Dashboard/>;
+  else if(route.segments[0]==="products"&&route.segments[1])page=<ProductDetail key={route.segments[1]} productId={decodeURIComponent(route.segments[1])} tab={route.params.get("tab")||"overview"}/>;
+  else if(["products","imports"].includes(route.segments[0]))page=<Catalog key={route.hash} view={route.path==="/imports"?"import":route.params.get("view")||"list"} search={route.params.get("search")||""}/>;
+  else if(route.segments[0]==="studio")page=<Studio key={route.hash} mode={route.segments[1]||"plans"}/>;
+  else if(route.segments[0]==="tasks")page=<Tasks key={route.hash} initialStatus={route.params.get("status")||""}/>;
+  else if(route.segments[0]==="reviews")page=<Reviews/>;
+  else if(route.segments[0]==="library")page=<Library/>;
+  else page=<div className="card"><h1>页面不存在</h1><a href="#/">返回工作台</a></div>;
+  return <div className="app-shell">
+    {mobileOpen&&<button className="sidebar-backdrop" aria-label="关闭导航" onClick={()=>setMobileOpen(false)}/>}
+    <aside className={"sidebar "+(mobileOpen?"is-open":"")} aria-label="主导航">
+      <a className="brand" href="#/"><div className="brand-mark">✳</div><div className="brand-name">ProductFlow <span>AI</span></div></a>
+      <nav className="nav">
+        {nav("/","工作台","home",route.path==="/")}
+        {nav("/products","商品库","products",["products","imports"].includes(route.segments[0]))}
+        <button className={"nav-parent "+(factoryActive?"current":"")} aria-expanded={factoryOpen} aria-controls="factory-navigation" onClick={()=>setFactoryOpen(v=>!v)}><Icon name="factory"/><span className="grow">AI 内容工厂</span><span className={"nav-chevron "+(factoryOpen?"expanded":"")} aria-hidden="true">›</span></button>
+        <div id="factory-navigation" className="nav-children" hidden={!factoryOpen}>{FACTORY.map(i=><div key={i.path}>{nav(i.path,i.label,i.icon,route.path===i.path||(route.path==="/studio"&&i.path==="/studio/plans"))}</div>)}</div>
+        {nav("/library","内容资产库","assets",route.path==="/library")}
+        {nav("/reviews","质量与交付","reviews",route.path==="/reviews")}
+      </nav>
+    </aside>
+    <div className="workspace"><header className="workspace-header">
+      <button className="btn btn-ghost menu-toggle" aria-label={mobileOpen?"关闭导航":"展开导航"} aria-expanded={mobileOpen} onClick={()=>setMobileOpen(v=>!v)}>☰</button>
+      <form className="global-search" onSubmit={e=>{e.preventDefault();navigate("/products?search="+encodeURIComponent(search.trim()))}}><input aria-label="搜索商品编号或名称" placeholder="搜索商品编号或名称…" value={search} onChange={e=>setSearch(e.target.value)}/></form>
+      <span className="internal-label">内部工作台</span><a className="btn btn-ghost btn-small" href="#/reviews">待审核{pending!==null?" "+pending:""}</a>
+    </header><main className="main" id="main-content">{page}</main></div>
+  </div>;
+}
+createRoot(document.getElementById("root")!).render(<App/>);
