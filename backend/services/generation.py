@@ -11,7 +11,7 @@ from ..errors import ApiError, conflict, not_found, reject
 from ..providers import image
 from ..providers import video as seedance
 from ..video import compose_video
-from . import catalog, planning, runs
+from . import catalog, planning, runs, tenants
 
 RETRYABLE = {"provider_timeout", "provider_connection", "provider_http"}
 STEPS_IMAGE = ["load_plan", "check_version", "load_references", "provider", "store", "verify"]
@@ -65,14 +65,21 @@ def _output(row: dict[str, Any]) -> dict[str, Any]:
         sources = []
         if plan:
             for source_id in loads(plan["source_ids"], []):
-                source = one(db, "SELECT id,name,mime,view_angle FROM sources WHERE id=?", (source_id,))
+                source = one(db, "SELECT id,name,mime,view_angle,purpose FROM sources WHERE id=?", (source_id,))
                 if source:
-                    sources.append(dict(source))
-    stale = bool(plan and latest and plan["version_id"] != latest["id"])
+                    purpose = source.get("purpose") or "reference"
+                    sources.append({**dict(source),
+                                    "role": "style" if purpose == "marketing" else "fact"})
+    stale = False
+    if plan and latest and plan["version_id"] != latest["id"]:
+        content = loads(plan.get("content_json") or plan.get("script"), {})
+        if catalog.content_depends_on(content, catalog.changed_fields(plan["product_id"])):
+            stale = True
     return {
         "id": row["id"],
         "plan_id": row["plan_id"],
         "kind": row["kind"],
+        "asset_type": "video" if row["kind"] == "video" else "ai_generated",
         "status": row["status"],
         "note": row["note"],
         "filename": row.get("filename") or "",
@@ -89,7 +96,7 @@ def _output(row: dict[str, Any]) -> dict[str, Any]:
         "url": f"/api/v1/outputs/{row['id']}",
         "download_url": f"/api/v1/outputs/{row['id']}/download",
         "needs_review": stale,
-        "stale_reason": "商品版本已更新，成品暂停交付并等待复审" if stale else "",
+        "stale_reason": "商品版本已更新且内容引用了变更字段，成品暂停交付并等待复审" if stale else "",
         "product_id": product["id"] if product else "",
         "product_name": product["name"] if product else "",
         "plan": {"id": plan["id"], "scene": plan["scene"], "version_id": plan["version_id"],
@@ -395,6 +402,20 @@ def revise_output(output_id: str, body: dict[str, Any]) -> dict[str, Any]:
         db.execute("UPDATE outputs SET attempt=?, source_output_id=? WHERE id=?",
                    (source["attempt"] + 1, output_id, created["id"]))
     return get_output(created["id"])
+
+
+def regenerate_affected(product_id: str) -> dict[str, Any]:
+    """定向更新：精确列出受字段变更影响的成品，并记录更新请求；未受影响成品继续交付。"""
+    result = catalog.impact(product_id)
+    with session() as db:
+        db.execute(
+            "INSERT INTO reviews(id,tenant_id,target_type,target_id,action,note,payload_json,reviewer,created_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
+            (uuid4().hex, tenants.current(), "product", product_id, "regenerate_requested",
+             f"请求定向更新 {result['affected_outputs']} 个受影响成品", dumps(result["changed_fields"]), "user", now()),
+        )
+    result["note"] = "已记录定向更新请求；受影响成品需基于最新版本重新策划后再生产，未受影响成品可继续交付"
+    return result
 
 
 def stats() -> dict[str, Any]:

@@ -149,3 +149,38 @@ def test_categories_and_sku(client):
     assert sku.json()["sku_code"] == "SKU01-BEIGE"
     duplicate = client.post("/api/v1/products/SKU01/skus", json={"sku_code": "SKU01-BEIGE"})
     assert duplicate.status_code == 409
+
+
+def test_sku_update_and_delete(client):
+    from tests.helpers import make_png
+
+    client.post("/api/v1/products", json={"id": "SKU02", "name": "SKU 更新测试", "category_id": "BAG"})
+    a = client.post("/api/v1/products/SKU02/skus", json={"sku_code": "SKU02-A", "attributes": {"color": "暖米白"}})
+    b = client.post("/api/v1/products/SKU02/skus", json={"sku_code": "SKU02-B", "attributes": {"color": "黑"}})
+    assert a.status_code == 201 and b.status_code == 201
+
+    updated = client.put(f"/api/v1/products/SKU02/skus/{a.json()['id']}", json={
+        "sku_code": "SKU02-A", "attributes": {"color": "杏色"},
+    })
+    assert updated.status_code == 200
+    assert updated.json()["attributes"]["color"] == "杏色"
+
+    skus = client.get("/api/v1/products/SKU02/skus").json()
+    by_code = {item["sku_code"]: item for item in skus}
+    assert by_code["SKU02-A"]["attributes"]["color"] == "杏色"
+    assert by_code["SKU02-B"]["attributes"]["color"] == "黑"
+
+    conflict = client.put(f"/api/v1/products/SKU02/skus/{a.json()['id']}", json={
+        "sku_code": "SKU02-B", "attributes": {"color": "杏色"},
+    })
+    assert conflict.status_code == 409
+
+    deleted = client.delete(f"/api/v1/products/SKU02/skus/{a.json()['id']}")
+    assert deleted.status_code == 200
+    assert deleted.json()["deleted"] is True
+    assert len(client.get("/api/v1/products/SKU02/skus").json()) == 1
+
+    upload(client, "SKU02", "正面.png", make_png(), view_angle="front", sku_id=b.json()["id"])
+    in_use = client.delete(f"/api/v1/products/SKU02/skus/{b.json()['id']}")
+    assert in_use.status_code == 409
+    assert error_code(in_use) == "sku_in_use"

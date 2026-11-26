@@ -49,8 +49,8 @@ def _confirmed_plan(client, mock_llm, product_id: str = "GEN01") -> dict:
         "category_id": "BAG", "source_ids": [doc["id"]],
     }).json()
     confirm_fields(client, detail["id"], FIELDS)
-    front = upload(client, product_id, "01-正面.png", make_png((248, 245, 240)), view_angle="front")
-    side = upload(client, product_id, "03-侧面.png", make_png((240, 236, 228)), view_angle="side")
+    front = upload(client, product_id, "01-正面.png", make_png((248, 245, 240)), view_angle="front", review_status="confirmed")
+    side = upload(client, product_id, "03-侧面.png", make_png((240, 236, 228)), view_angle="side", review_status="confirmed")
     mock_llm["state"]["result"] = PLAN
     plan = client.post(f"/api/v1/products/{product_id}/plans", json={
         "scene": "抖音春节年货节", "source_ids": [front["id"], side["id"]],
@@ -164,6 +164,60 @@ def test_seedance_invalid_provider_rejected(client, mock_llm):
                            json={"provider": "unknown"})
     assert response.status_code == 422
     assert error_code(response) == "invalid_input"
+
+
+def test_precise_impact_only_affected_fields(client, mock_llm, mock_image):
+    setup = _confirmed_plan(client, mock_llm, "GEN07")
+    plan_id = setup["plan"]["id"]
+    output = client.post(f"/api/v1/plans/{plan_id}/outputs/image", json={}).json()["outputs"][0]
+    client.put(f"/api/v1/outputs/{output['id']}/review", json={"approved": True, "note": "通过"})
+
+    # 变更未被策划引用的字段 weight：不应影响该成品
+    doc = upload(client, "GEN07", "v2.pdf", make_pdf([
+        "BP01 Ladies Backpack Specification",
+        "Body Material: wool blend 70 percent",
+        "Lining Material: brown canvas",
+        "Dimensions: 280 mm x 240 mm x 120 mm",
+        "Color: warm beige",
+        "Weight: 700 g",
+    ]))
+    mock_llm["state"]["result"] = {"items": ITEMS + [
+        {"field": "weight", "block_id": 0, "quote": "Weight: 700 g", "value": "700 g"},
+    ]}
+    detail = client.post("/api/v1/products/GEN07/imports/extract", json={
+        "category_id": "BAG", "source_ids": [doc["id"]],
+    }).json()
+    confirm_fields(client, detail["id"], {**FIELDS, "weight": "700 g"},
+                   manual_basis={"weight": "实物称重"})
+
+    unaffected = client.get("/api/v1/products/GEN07/outputs").json()[0]
+    assert unaffected["needs_review"] is False
+
+    # 再变更被引用的 body_material：应标记待复审
+    doc2 = upload(client, "GEN07", "v3.pdf", make_pdf([
+        "BP01 Ladies Backpack Specification",
+        "Body Material: full grain leather",
+        "Lining Material: brown canvas",
+        "Dimensions: 280 mm x 240 mm x 120 mm",
+        "Color: warm beige",
+        "Weight: 700 g",
+    ]))
+    mock_llm["state"]["result"] = {"items": [
+        dict(ITEMS[0], quote="Body Material: full grain leather", value="full grain leather"),
+    ]}
+    detail2 = client.post("/api/v1/products/GEN07/imports/extract", json={
+        "category_id": "BAG", "source_ids": [doc2["id"]],
+    }).json()
+    confirm_fields(client, detail2["id"],
+                   {**FIELDS, "body_material": "full grain leather", "weight": "700 g"},
+                   manual_basis={"lining_material": "沿用", "dimensions": "沿用", "color": "沿用", "weight": "实物称重"})
+
+    stale = client.get("/api/v1/products/GEN07/outputs").json()[0]
+    assert stale["needs_review"] is True
+
+    regen = client.post("/api/v1/products/GEN07/regenerate-affected").json()
+    assert regen["affected_outputs"] >= 1
+    assert any(item["field"] == "body_material" for item in regen["changed_fields"])
 
 
 def test_new_product_version_pauses_old_outputs(client, mock_llm, mock_image):

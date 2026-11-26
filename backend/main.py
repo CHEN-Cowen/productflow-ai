@@ -44,6 +44,7 @@ def create_app(data_dir: str | Path | None = None) -> FastAPI:
                                                  message=error.message, hint=error.hint,
                                                  legacy_code=error.code))
         tenants.set_current(tenant_id)
+        tenants.set_operator(request.headers.get("X-Operator-Id") or "")
         return await call_next(request)
 
     @app.exception_handler(ApiError)

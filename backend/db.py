@@ -81,6 +81,8 @@ CREATE TABLE IF NOT EXISTS sources (
     view_angle TEXT NOT NULL DEFAULT '',
     review_status TEXT NOT NULL DEFAULT 'pending',
     status TEXT NOT NULL DEFAULT 'stored',
+    asset_type TEXT NOT NULL DEFAULT 'raw',
+    tags TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL DEFAULT ''
 );
 
@@ -355,6 +357,8 @@ MIGRATIONS: dict[str, list[tuple[str, str]]] = {
         ("view_angle", "TEXT NOT NULL DEFAULT ''"),
         ("review_status", "TEXT NOT NULL DEFAULT 'pending'"),
         ("status", "TEXT NOT NULL DEFAULT 'stored'"),
+        ("asset_type", "TEXT NOT NULL DEFAULT 'raw'"),
+        ("tags", "TEXT NOT NULL DEFAULT '[]'"),
         ("created_at", "TEXT NOT NULL DEFAULT ''"),
     ],
     "imports": [

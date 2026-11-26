@@ -17,6 +17,7 @@ from . import rules, tenants
 
 ANGLES = {"front": "正面", "back": "背面", "side": "侧面", "top": "顶部", "bottom": "底部", "interior": "内里"}
 PURPOSES = {"reference": "商品参考", "spec": "规格资料", "marketing": "营销素材"}
+ASSET_TYPES = {"raw": "原始素材", "reference": "参考素材", "ai_generated": "AI 生成", "video": "视频素材", "auxiliary": "辅助资料"}
 REVIEW_STATUS = {"pending": "待审核", "confirmed": "已确认", "rejected": "已废弃"}
 PRODUCT_ID = re.compile(r"^[A-Z0-9][A-Z0-9-]{0,31}$")
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -214,6 +215,28 @@ def get_version(version_id: int) -> dict[str, Any]:
         return _version(row, latest["id"] if latest else None)
 
 
+def restore_version(product_id: str, version_id: int) -> dict[str, Any]:
+    """以历史版本字段生成新版本（追加而非覆盖），用于回退误改。"""
+    with session() as db:
+        tenants.require_product_access(db, product_id)
+        target = one(db, "SELECT * FROM product_versions WHERE id=? AND product_id=?", (version_id, product_id))
+        if target is None:
+            raise not_found("找不到要恢复的版本")
+        previous = one(db, "SELECT version FROM product_versions WHERE product_id=? ORDER BY version DESC, id DESC LIMIT 1",
+                       (product_id,))
+        version_number = (previous["version"] + 1) if previous else 1
+        cursor = db.execute(
+            "INSERT INTO product_versions(tenant_id,product_id,import_id,category,category_id,version,fields,"
+            "provenance_json,sku,note,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            (tenants.current(), product_id, "", target["category"], target.get("category_id") or target["category"],
+             version_number, target["fields"], target.get("provenance_json") or "{}",
+             target.get("sku") or "", f"恢复自版本 v{target['version']}", "user", now()),
+        )
+        new_id = cursor.lastrowid
+        db.execute("UPDATE products SET status='confirmed', updated_at=? WHERE id=?", (now(), product_id))
+        return _version(one(db, "SELECT * FROM product_versions WHERE id=?", (new_id,)), new_id)
+
+
 def version_diff(product_id: str, from_version: int | None = None, to_version: int | None = None) -> dict[str, Any]:
     with session() as db:
         versions = rows(db, "SELECT * FROM product_versions WHERE product_id=? ORDER BY version DESC, id DESC", (product_id,))
@@ -300,8 +323,7 @@ def create_sku(product_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         raise reject("SKU 规格需为键值对象")
     stamp = now()
     with session() as db:
-        if one(db, "SELECT 1 FROM products WHERE id=?", (product_id,)) is None:
-            raise not_found("找不到该商品")
+        tenants.require_product_access(db, product_id)
         if one(db, "SELECT 1 FROM skus WHERE product_id=? AND sku_code=?", (product_id, code)):
             raise conflict("该商品下 SKU 编码已存在")
         sku_id = uuid4().hex
@@ -312,9 +334,44 @@ def create_sku(product_id: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 def list_skus(product_id: str) -> list[dict[str, Any]]:
     with session() as db:
-        if one(db, "SELECT 1 FROM products WHERE id=?", (product_id,)) is None:
-            raise not_found("找不到该商品")
+        tenants.require_product_access(db, product_id)
         return [_sku(row) for row in rows(db, "SELECT * FROM skus WHERE product_id=? ORDER BY created_at", (product_id,))]
+
+
+def update_sku(product_id: str, sku_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    with session() as db:
+        tenants.require_product_access(db, product_id)
+        row = one(db, "SELECT * FROM skus WHERE id=? AND product_id=?", (sku_id, product_id))
+        if row is None:
+            raise not_found("找不到该 SKU，或 SKU 不属于该商品")
+        code = str(payload.get("sku_code") or row["sku_code"]).strip().upper()
+        if not code or len(code) > 40:
+            raise reject("请填写 1-40 位 SKU 编码")
+        attributes = payload.get("attributes")
+        if attributes is None:
+            attributes = loads(row["attributes_json"], {})
+        if not isinstance(attributes, dict):
+            raise reject("SKU 规格需为键值对象")
+        duplicate = one(db, "SELECT 1 FROM skus WHERE product_id=? AND sku_code=? AND id<>?",
+                        (product_id, code, sku_id))
+        if duplicate:
+            raise conflict("该商品下 SKU 编码已存在")
+        db.execute("UPDATE skus SET sku_code=?, attributes_json=? WHERE id=? AND product_id=?",
+                   (code, dumps(attributes), sku_id, product_id))
+        return _sku(one(db, "SELECT * FROM skus WHERE id=?", (sku_id,)))
+
+
+def delete_sku(product_id: str, sku_id: str) -> dict[str, Any]:
+    with session() as db:
+        tenants.require_product_access(db, product_id)
+        row = one(db, "SELECT * FROM skus WHERE id=? AND product_id=?", (sku_id, product_id))
+        if row is None:
+            raise not_found("找不到该 SKU，或 SKU 不属于该商品")
+        linked = one(db, "SELECT COUNT(*) AS n FROM sources WHERE sku_id=?", (sku_id,))
+        if linked and linked["n"]:
+            raise conflict("该 SKU 已被素材关联，请先解除素材关联后再删除", code="sku_in_use")
+        db.execute("DELETE FROM skus WHERE id=? AND product_id=?", (sku_id, product_id))
+        return {"deleted": True, "id": sku_id}
 
 
 def _sku(row: dict[str, Any]) -> dict[str, Any]:
@@ -330,7 +387,11 @@ def _source(row: dict[str, Any]) -> dict[str, Any]:
         "purpose": row.get("purpose") or "reference",
         "view_angle": row.get("view_angle") or "", "angle_label": ANGLES.get(row.get("view_angle") or "", ""),
         "review_status": row.get("review_status") or "pending",
-        "status": row.get("status") or "stored", "created_at": row.get("created_at") or "",
+        "status": row.get("status") or "stored",
+        "asset_type": row.get("asset_type") or "raw",
+        "asset_type_label": ASSET_TYPES.get(row.get("asset_type") or "raw", "原始素材"),
+        "tags": loads(row.get("tags"), []),
+        "created_at": row.get("created_at") or "",
         "url": f"/api/v1/products/{row['product_id']}/sources/{row['id']}",
     }
 
@@ -366,6 +427,8 @@ def upload_source(
     purpose: str = "reference",
     view_angle: str = "",
     review_status: str = "pending",
+    asset_type: str = "raw",
+    tags: list[str] | None = None,
 ) -> dict[str, Any]:
     if not content:
         raise reject("文件为空")
@@ -374,10 +437,15 @@ def upload_source(
     mime, kind = detect_file(content, filename)
     if purpose not in PURPOSES:
         raise reject("请选择素材用途")
+    if asset_type not in ASSET_TYPES:
+        raise reject("请选择有效的素材类型")
     if view_angle and view_angle not in ANGLES:
         raise reject("请选择有效的视角")
     if review_status not in REVIEW_STATUS:
         raise reject("审核状态无效")
+    if kind == "image" and review_status == "confirmed" and not view_angle:
+        raise reject("确认商品参考图前必须标注视角", hint="请先选择正面/背面等视角再确认", code="angle_required_for_confirm")
+    tags = list(dict.fromkeys(tag.strip() for tag in (tags or []) if tag and tag.strip()))[:20]
     safe_name = Path(str(filename or "原始资料").replace("\\", "/")).name[:180] or "原始资料"
     digest = hashlib.sha256(content).hexdigest()
     source_id = uuid4().hex
@@ -399,9 +467,9 @@ def upload_source(
         try:
             db.execute(
                 "INSERT INTO sources(id,tenant_id,product_id,sku_id,name,mime,size,sha256,kind,purpose,view_angle,"
-                "review_status,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "review_status,status,asset_type,tags,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (source_id, tenants.current(), product_id, sku_id or None, safe_name, mime, len(content), digest, kind,
-                 purpose, view_angle, review_status, "stored", stamp),
+                 purpose, view_angle, review_status, "stored", asset_type, dumps(tags), stamp),
             )
         except Exception:
             path.unlink(missing_ok=True)
@@ -455,7 +523,7 @@ def source_file(product_id: str, source_id: str) -> tuple[dict[str, Any], Path]:
 
 
 def list_all_sources(*, product_id: str = "", angle: str = "", review_status: str = "",
-                     search: str = "") -> list[dict[str, Any]]:
+                     asset_type: str = "", search: str = "") -> list[dict[str, Any]]:
     query = ("SELECT s.*, p.name AS product_name FROM sources s JOIN products p ON p.id=s.product_id "
              "WHERE s.tenant_id=?")
     params: list[Any] = [tenants.current()]
@@ -468,13 +536,21 @@ def list_all_sources(*, product_id: str = "", angle: str = "", review_status: st
     if review_status:
         query += " AND s.review_status=?"
         params.append(review_status)
+    if asset_type:
+        query += " AND s.asset_type=?"
+        params.append(asset_type)
     if search:
-        query += " AND (s.name LIKE ? OR p.name LIKE ? OR s.product_id LIKE ?)"
-        params += [f"%{search}%", f"%{search}%", f"%{search}%"]
+        query += " AND (s.name LIKE ? OR p.name LIKE ? OR s.product_id LIKE ? OR s.tags LIKE ?)"
+        params += [f"%{search}%", f"%{search}%", f"%{search}%", f"%{search}%"]
     query += " ORDER BY s.created_at DESC, s.rowid DESC"
     with session() as db:
-        return [dict(item) | {"url": f"/api/v1/products/{item['product_id']}/sources/{item['id']}"}
-                for item in [dict(row) for row in db.execute(query, params).fetchall()]]
+        result = []
+        for item in [dict(row) for row in db.execute(query, params).fetchall()]:
+            item["asset_type_label"] = ASSET_TYPES.get(item.get("asset_type") or "raw", "原始素材")
+            item["tags"] = loads(item.get("tags"), [])
+            item["url"] = f"/api/v1/products/{item['product_id']}/sources/{item['id']}"
+            result.append(item)
+        return result
 
 
 def update_source(product_id: str, source_id: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -487,17 +563,30 @@ def update_source(product_id: str, source_id: str, payload: dict[str, Any]) -> d
         purpose = payload.get("purpose", current["purpose"])
         status = payload.get("review_status", current["review_status"])
         sku_id = payload.get("sku_id", current.get("sku_id") or "")
+        asset_type = payload.get("asset_type", current.get("asset_type") or "raw")
+        if "tags" in payload:
+            raw_tags = payload.get("tags")
+            if not isinstance(raw_tags, list):
+                raise reject("标签需为数组")
+            tags = list(dict.fromkeys(tag.strip() for tag in raw_tags if str(tag).strip()))[:20]
+        else:
+            tags = loads(current.get("tags"), [])
         if angle and angle not in ANGLES:
             raise reject("请选择有效的视角")
         if purpose not in PURPOSES:
             raise reject("请选择素材用途")
+        if asset_type not in ASSET_TYPES:
+            raise reject("请选择有效的素材类型")
         if status not in REVIEW_STATUS:
             raise reject("审核状态无效")
         if sku_id and one(db, "SELECT 1 FROM skus WHERE id=? AND product_id=?", (sku_id, product_id)) is None:
             raise reject("SKU 不属于该商品", code="invalid_sku")
+        if str(current.get("kind") or "document") == "image" and status == "confirmed" and not angle:
+            raise reject("确认商品参考图前必须标注视角", hint="请先选择视角再确认", code="angle_required_for_confirm")
         db.execute(
-            "UPDATE sources SET view_angle=?, purpose=?, review_status=?, sku_id=? WHERE id=? AND product_id=?",
-            (angle or "", purpose, status, sku_id or None, source_id, product_id),
+            "UPDATE sources SET view_angle=?, purpose=?, review_status=?, sku_id=?, asset_type=?, tags=? "
+            "WHERE id=? AND product_id=?",
+            (angle or "", purpose, status, sku_id or None, asset_type, dumps(tags), source_id, product_id),
         )
         return _source(one(db, "SELECT * FROM sources WHERE id=?", (source_id,)))
 
@@ -522,12 +611,30 @@ def suggest_angle(filename: str) -> dict[str, Any]:
     return {"angle": "", "label": "", "method": "filename_rule", "note": "文件名未包含视角关键词，请人工选择"}
 
 
-def _plan_impact_reasons(plan: dict[str, Any], changed: list[dict[str, Any]]) -> list[str]:
-    """分析旧版本策划受字段变更影响的具体原因（复杂内容影响分析）。"""
-    content = loads(plan.get("content_json") or plan.get("script"), {})
+def changed_fields(product_id: str) -> list[dict[str, Any]]:
+    """返回最新版本相对上一版本发生变化的字段列表（供依赖判定复用）。"""
+    with session() as db:
+        versions = rows(db, "SELECT * FROM product_versions WHERE product_id=? ORDER BY version DESC, id DESC LIMIT 2",
+                        (product_id,))
+        if len(versions) < 2:
+            return []
+        current = versions[0]
+        previous = versions[1]
+        labels = field_labels(category(db, current.get("category_id") or current["category"])["schema"])
+        old = loads(previous["fields"], {})
+        new = loads(current["fields"], {})
+        return [
+            {"field": key, "label": labels.get(key, key), "from": old.get(key, ""), "to": new.get(key, "")}
+            for key in sorted(set(old) | set(new)) if old.get(key, "") != new.get(key, "")
+        ]
+
+
+def content_impact_reasons(content: dict[str, Any], changed: list[dict[str, Any]]) -> list[str]:
+    """分析策划内容引用哪些已变更字段，返回具体影响原因。"""
     reasons: list[str] = []
-    points = content.get("selling_points") or []
-    for index, point in enumerate(points, start=1):
+    for index, point in enumerate(content.get("selling_points") or [], start=1):
+        if not isinstance(point, dict):
+            continue
         field = point.get("field") or ""
         for ch in changed:
             if ch["field"] == field:
@@ -547,13 +654,17 @@ def _plan_impact_reasons(plan: dict[str, Any], changed: list[dict[str, Any]]) ->
     return sorted(set(reasons))
 
 
+def content_depends_on(content: dict[str, Any], changed: list[dict[str, Any]]) -> bool:
+    return bool(content_impact_reasons(content, changed))
+
+
 def impact(product_id: str) -> dict[str, Any]:
     with session() as db:
         if one(db, "SELECT 1 FROM products WHERE id=?", (product_id,)) is None:
             raise not_found("找不到该商品")
         versions = rows(db, "SELECT * FROM product_versions WHERE product_id=? ORDER BY version DESC, id DESC LIMIT 2", (product_id,))
         if not versions:
-            return {"product_id": product_id, "changed_fields": [], "affected_plans": [], "affected_outputs": 0}
+            return {"product_id": product_id, "changed_fields": [], "affected_plans": [], "affected_outputs": 0, "note": "暂无版本"}
         current = versions[0]
         previous = versions[1] if len(versions) > 1 else None
         labels = field_labels(category(db, current.get("category_id") or current["category"])["schema"])
@@ -568,9 +679,13 @@ def impact(product_id: str) -> dict[str, Any]:
         for plan in plans:
             if plan["version_id"] == current["id"]:
                 continue
+            content = loads(plan.get("content_json") or plan.get("script"), {})
+            reasons = content_impact_reasons(content, changed)
+            if not reasons:
+                continue
             outputs = rows(db, "SELECT id, kind, status FROM outputs WHERE plan_id=?", (plan["id"],))
             affected.append({"id": plan["id"], "scene": plan["scene"], "version_id": plan["version_id"],
-                             "outputs": outputs, "impact_reasons": _plan_impact_reasons(plan, changed)})
+                             "outputs": outputs, "impact_reasons": reasons})
         return {
             "product_id": product_id,
             "current_version": {"id": current["id"], "version": current["version"]},
@@ -578,5 +693,5 @@ def impact(product_id: str) -> dict[str, Any]:
             "changed_fields": changed,
             "affected_plans": affected,
             "affected_outputs": sum(len(item["outputs"]) for item in affected),
-            "note": "旧版本成品会暂停下载并标记待复审" if affected else "暂无受影响的旧版本成品",
+            "note": "仅内容引用了变更字段的旧版本成品会暂停下载并标记待复审" if affected else "暂无受影响的旧版本成品",
         }

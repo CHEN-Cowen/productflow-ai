@@ -59,7 +59,7 @@ def test_planning_version_stores_channel_strategy(client, mock_llm):
     from tests.helpers import PNG_1X1
 
     _confirmed(client, mock_llm, "CHAN01")
-    image = upload(client, "CHAN01", "正面.png", PNG_1X1, view_angle="front")
+    image = upload(client, "CHAN01", "正面.png", PNG_1X1, view_angle="front", review_status="confirmed")
     mock_llm["state"]["result"] = PLAN
     task = client.post("/api/v1/planning/tasks", json={
         "product_id": "CHAN01", "scene": "抖音春节年货节", "channel": "抖音",
@@ -76,7 +76,7 @@ def test_impact_analysis_reports_field_level_reasons(client, mock_llm):
     from tests.helpers import PNG_1X1
 
     _confirmed(client, mock_llm, "IMPACT01")
-    image = upload(client, "IMPACT01", "正面.png", PNG_1X1, view_angle="front")
+    image = upload(client, "IMPACT01", "正面.png", PNG_1X1, view_angle="front", review_status="confirmed")
     mock_llm["state"]["result"] = PLAN
     task = client.post("/api/v1/planning/tasks", json={
         "product_id": "IMPACT01", "scene": "春节", "channel": "抖音", "source_ids": [image["id"]],

@@ -78,10 +78,13 @@ def _references(db, product_id: str, source_ids: list[str]) -> list[dict[str, An
             raise reject("策划参考必须是图片素材")
         if not row.get("view_angle"):
             raise reject(f"参考图 {row['name']} 尚未标记视角，请先在素材区完成视角标注")
-        if row.get("review_status") == "rejected":
-            raise reject(f"参考图 {row['name']} 已废弃，不能用于策划")
+        if row.get("review_status") != "confirmed":
+            raise reject(f"参考图 {row['name']} 尚未审核确认，不能用于策划", code="source_not_confirmed")
+        purpose = row.get("purpose") or "reference"
+        role = "style" if purpose == "marketing" else "fact"
         refs.append({"id": row["id"], "name": row["name"], "angle": row["view_angle"],
-                     "angle_label": catalog.ANGLES.get(row["view_angle"], row["view_angle"])})
+                     "angle_label": catalog.ANGLES.get(row["view_angle"], row["view_angle"]),
+                     "purpose": purpose, "role": role})
     return refs
 
 
@@ -127,10 +130,12 @@ def _with_meta(db, row: dict[str, Any]) -> dict[str, Any]:
     plan["version"] = version["version"] if version else None
     materials = []
     for source_id in plan["source_ids"]:
-        source = one(db, "SELECT id,name,mime,view_angle FROM sources WHERE product_id=? AND id=?",
+        source = one(db, "SELECT id,name,mime,view_angle,purpose FROM sources WHERE product_id=? AND id=?",
                      (row["product_id"], source_id))
         if source:
-            materials.append({**dict(source), "angle_label": catalog.ANGLES.get(source["view_angle"], "")})
+            purpose = source.get("purpose") or "reference"
+            materials.append({**dict(source), "angle_label": catalog.ANGLES.get(source["view_angle"], ""),
+                              "role": "style" if purpose == "marketing" else "fact"})
     plan["materials"] = materials
     return plan
 
@@ -171,7 +176,8 @@ def create_plan(product_id: str, body: dict[str, Any]) -> dict[str, Any]:
                 "channel_strategy": channel_strategy.resolve(body.get("channel") or "抖音"),
                 "facts": [{"field": key, "label": labels.get(key, key), "value": value}
                           for key, value in fields.items()],
-                "references": [{"id": item["id"], "angle": item["angle"], "angle_label": item["angle_label"]}
+                "references": [{"id": item["id"], "angle": item["angle"], "angle_label": item["angle_label"],
+                                "purpose": item["purpose"], "role": item["role"]}
                                for item in refs],
             })
         runs.step(run_id, "plan", "success", "手工策划" if manual else "模型策划")

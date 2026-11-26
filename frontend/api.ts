@@ -54,6 +54,7 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
     }),
+  delete: <T = any>(path: string) => request<T>(path, { method: "DELETE" }),
   upload: <T = any>(path: string, form: FormData) => request<T>(path, { method: "POST", body: form }),
 };
 
@@ -84,6 +85,14 @@ export const PURPOSES = [
   { value: "reference", label: "商品参考" },
   { value: "spec", label: "规格资料" },
   { value: "marketing", label: "营销素材" },
+];
+
+export const ASSET_TYPES = [
+  { value: "raw", label: "原始素材" },
+  { value: "reference", label: "参考素材" },
+  { value: "ai_generated", label: "AI 生成" },
+  { value: "video", label: "视频素材" },
+  { value: "auxiliary", label: "辅助资料" },
 ];
 
 export function angleLabel(value: string): string {

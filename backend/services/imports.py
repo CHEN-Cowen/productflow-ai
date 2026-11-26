@@ -267,6 +267,8 @@ def confirm(import_id: str, body: dict[str, Any]) -> dict[str, Any]:
         raise reject("；".join(errors[:6]))
     candidates = loads(row["candidates"], {})
     manual_basis = body.get("manual_basis") or {}
+    stamp = now()
+    operator = tenants.current_operator()
     provenance: dict[str, Any] = {}
     missing_basis: list[str] = []
     for key, value in fields.items():
@@ -287,6 +289,8 @@ def confirm(import_id: str, body: dict[str, Any]) -> dict[str, Any]:
                 "standard_value": value,
                 "method": matched.get("method") or "document_extraction",
                 "status": "verified",
+                "confirmed_at": stamp,
+                "confirmed_by": operator,
             }
         else:
             basis = str((manual_basis or {}).get(key) or "").strip()
@@ -297,6 +301,8 @@ def confirm(import_id: str, body: dict[str, Any]) -> dict[str, Any]:
                 "source_id": "", "source_name": "", "locator": {}, "quote": "",
                 "raw_value": value, "standard_value": value, "method": "manual",
                 "basis": basis[:300], "status": "verified",
+                "confirmed_at": stamp,
+                "confirmed_by": operator,
             }
     if missing_basis:
         raise reject(CONFIRM_REQUIRED_BASIS + "：" + "、".join(missing_basis),
@@ -309,7 +315,6 @@ def confirm(import_id: str, body: dict[str, Any]) -> dict[str, Any]:
         if item.get("resolution") not in {"merge", "keep", "resolved", "ignored"}:
             raise reject("异常处理方式无效")
         resolutions.append({"issue_id": item["issue_id"], "resolution": item["resolution"]})
-    stamp = now()
     with session() as db, db:
         previous = one(db, "SELECT * FROM product_versions WHERE product_id=? ORDER BY version DESC, id DESC LIMIT 1",
                        (row["product_id"],))
@@ -319,7 +324,7 @@ def confirm(import_id: str, body: dict[str, Any]) -> dict[str, Any]:
             "sku,note,created_by,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
             (tenants.current(), row["product_id"], import_id, row["category"], row.get("category_id") or row["category"],
              version_number, dumps(fields), dumps(provenance), str(body.get("sku") or "").strip()[:80],
-             str(body.get("note") or "").strip()[:300], "user", stamp),
+             str(body.get("note") or "").strip()[:300], operator, stamp),
         )
         version_id = cursor.lastrowid
         db.execute("UPDATE imports SET status='confirmed', updated_at=? WHERE id=?", (stamp, import_id))
@@ -328,7 +333,7 @@ def confirm(import_id: str, body: dict[str, Any]) -> dict[str, Any]:
             "INSERT INTO reviews(id,target_type,target_id,action,note,payload_json,reviewer,created_at) "
             "VALUES(?,?,?,?,?,?,?,?)",
             (uuid4().hex, "import", import_id, "confirm", str(body.get("note") or "")[:500],
-             dumps({"version_id": version_id, "fields": fields, "resolutions": resolutions}), "user", stamp),
+             dumps({"version_id": version_id, "fields": fields, "resolutions": resolutions}), operator, stamp),
         )
         old_fields = loads(previous["fields"], {}) if previous else {}
         labels = field_labels(schema)

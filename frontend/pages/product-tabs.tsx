@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ANGLES, PURPOSES, angleLabel, api, formatSize, formatTime, statusLabel } from "../api";
+import { ANGLES, ASSET_TYPES, PURPOSES, angleLabel, api, formatSize, formatTime, statusLabel } from "../api";
 import { Badge, Empty, ErrorBox, Field, Loading, Notice, Section, statusTone } from "../ui";
 import { OutputCard, RunSteps } from "../components";
 import { fieldLabels, locatorText, planTemplate } from "../product-utils";
@@ -435,6 +435,8 @@ function AssetCard({ source, productId, skus, reload }: { source: any; productId
   const [purpose, setPurpose] = useState(source.purpose || "reference");
   const [reviewStatus, setReviewStatus] = useState(source.review_status || "pending");
   const [skuId, setSkuId] = useState(source.sku_id || "");
+  const [assetType, setAssetType] = useState(source.asset_type || "raw");
+  const [tags, setTags] = useState<string>((source.tags || []).join(", "));
   const [busy, setBusy] = useState("");
   const [error, setError] = useState<unknown>(null);
   const [message, setMessage] = useState("");
@@ -446,6 +448,7 @@ function AssetCard({ source, productId, skus, reload }: { source: any; productId
     try {
       await api.put(`/products/${productId}/sources/${source.id}`, {
         view_angle: angle, purpose, review_status: reviewStatus, sku_id: skuId || "",
+        asset_type: assetType, tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
       });
       setMessage("标注已保存");
       await reload();
@@ -499,6 +502,16 @@ function AssetCard({ source, productId, skus, reload }: { source: any; productId
           <select value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value)}>
             <option value="pending">待审核</option><option value="confirmed">已确认</option><option value="rejected">已废弃</option>
           </select>
+        </Field>
+      </div>
+      <div className="form-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+        <Field label="素材类型">
+          <select value={assetType} onChange={(event) => setAssetType(event.target.value)}>
+            {ASSET_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </Field>
+        <Field label="标签" hint="逗号分隔">
+          <input value={tags} onChange={(event) => setTags(event.target.value)} />
         </Field>
       </div>
       <Field label="关联 SKU">

@@ -54,6 +54,8 @@ class SourcePatch(BaseModel):
     purpose: str | None = None
     review_status: str | None = None
     sku_id: str | None = None
+    asset_type: str | None = None
+    tags: list[str] | None = None
 
 
 class ExtractIn(BaseModel):
@@ -235,9 +237,19 @@ def version_diff(product_id: str, from_version: int | None = None, to_version: i
     return catalog.version_diff(product_id, from_version, to_version)
 
 
+@router.post("/products/{product_id}/versions/{version_id}/restore")
+def restore_version(product_id: str, version_id: int) -> dict[str, Any]:
+    return catalog.restore_version(product_id, version_id)
+
+
 @router.get("/products/{product_id}/impact")
 def impact(product_id: str) -> dict[str, Any]:
     return catalog.impact(product_id)
+
+
+@router.post("/products/{product_id}/regenerate-affected")
+def regenerate_affected(product_id: str) -> dict[str, Any]:
+    return generation.regenerate_affected(product_id)
 
 
 @router.get("/products/{product_id}/skus")
@@ -250,6 +262,16 @@ def create_sku(product_id: str, body: SkuIn) -> dict[str, Any]:
     return catalog.create_sku(product_id, body.model_dump())
 
 
+@router.put("/products/{product_id}/skus/{sku_id}")
+def update_sku(product_id: str, sku_id: str, body: SkuIn) -> dict[str, Any]:
+    return catalog.update_sku(product_id, sku_id, body.model_dump())
+
+
+@router.delete("/products/{product_id}/skus/{sku_id}")
+def delete_sku(product_id: str, sku_id: str) -> dict[str, Any]:
+    return catalog.delete_sku(product_id, sku_id)
+
+
 # ---------- 原始资料 ----------
 @router.post("/products/{product_id}/sources", status_code=201)
 async def upload_source(
@@ -259,10 +281,14 @@ async def upload_source(
     purpose: str = Form("reference"),
     view_angle: str = Form(""),
     review_status: str = Form("pending"),
+    asset_type: str = Form("raw"),
+    tags: str = Form(""),
 ) -> dict[str, Any]:
     content = await file.read(config.MAX_UPLOAD_BYTES + 1)
+    tags_list = [tag for tag in tags.split(",") if tag.strip()] if tags else []
     return catalog.upload_source(product_id, file.filename or "原始资料", content, sku_id=sku_id,
-                                 purpose=purpose, view_angle=view_angle, review_status=review_status)
+                                 purpose=purpose, view_angle=view_angle, review_status=review_status,
+                                 asset_type=asset_type, tags=tags_list)
 
 
 @router.get("/products/{product_id}/sources/{source_id}")
@@ -343,9 +369,10 @@ def resolve_issue(issue_id: str, body: ResolveIn) -> dict[str, Any]:
 
 # ---------- 素材与资产 ----------
 @router.get("/assets/sources")
-def assets(product_id: str = "", angle: str = "", review_status: str = "", search: str = "") -> dict[str, Any]:
+def assets(product_id: str = "", angle: str = "", review_status: str = "", asset_type: str = "",
+           search: str = "") -> dict[str, Any]:
     items = catalog.list_all_sources(product_id=product_id, angle=angle,
-                                     review_status=review_status, search=search)
+                                     review_status=review_status, asset_type=asset_type, search=search)
     return {"items": items, "total": len(items)}
 
 

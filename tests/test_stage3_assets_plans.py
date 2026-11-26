@@ -87,7 +87,7 @@ def test_plan_create_edit_confirm_and_reuse(client, mock_llm):
     product = _confirmed(client, mock_llm)
     from tests.helpers import PNG_1X1
 
-    image = upload(client, "PLAN01", "01-正面.png", PNG_1X1, view_angle="front")
+    image = upload(client, "PLAN01", "01-正面.png", PNG_1X1, view_angle="front", review_status="confirmed")
     mock_llm["state"]["result"] = PLAN
     created = client.post("/api/v1/products/PLAN01/plans", json={
         "scene": "抖音春节年货节", "channel": "抖音", "audience": "约30岁女性",
@@ -161,3 +161,66 @@ def test_plan_requires_confirmed_version_and_angle(client, mock_llm):
     })
     assert rejected.status_code == 422
     assert "视角" in rejected.json()["detail"]["message"]
+
+
+def test_plan_requires_confirmed_reference(client, mock_llm):
+    from tests.helpers import PNG_1X1
+
+    _confirmed(client, mock_llm, "PLAN04")
+    pending = upload(client, "PLAN04", "待确认-正面.png", PNG_1X1, view_angle="front")
+    rejected = client.post("/api/v1/products/PLAN04/plans", json={
+        "scene": "测试场景", "source_ids": [pending["id"]],
+    })
+    assert rejected.status_code == 422
+    assert error_code(rejected) == "source_not_confirmed"
+
+
+def test_asset_type_and_tags(client):
+    from tests.helpers import make_png
+
+    client.post("/api/v1/products", json={"id": "ASSET04", "name": "素材类型测试"})
+    source = upload(client, "ASSET04", "01-正面.png", make_png((200, 200, 200)),
+                    view_angle="front", asset_type="raw", tags="正面,主图")
+    assert source["asset_type"] == "raw"
+    assert source["tags"] == ["正面", "主图"]
+
+    updated = client.put(f"/api/v1/products/ASSET04/sources/{source['id']}", json={
+        "asset_type": "reference", "tags": ["风格参考", "春节"],
+    })
+    assert updated.status_code == 200
+    assert updated.json()["asset_type"] == "reference"
+    assert updated.json()["tags"] == ["风格参考", "春节"]
+
+    by_type = client.get("/api/v1/assets/sources", params={"asset_type": "reference"}).json()
+    assert any(item["id"] == source["id"] for item in by_type["items"])
+
+    by_tag = client.get("/api/v1/assets/sources", params={"search": "风格参考"}).json()
+    assert any(item["id"] == source["id"] for item in by_tag["items"])
+
+
+def test_reference_role_fact_style(client, mock_llm):
+    from tests.helpers import make_png
+
+    _confirmed(client, mock_llm, "PLAN05")
+    fact = upload(client, "PLAN05", "01-正面.png", make_png((1, 2, 3)),
+                  view_angle="front", review_status="confirmed", purpose="reference")
+    style = upload(client, "PLAN05", "风格参考.png", make_png((4, 5, 6)),
+                   view_angle="side", review_status="confirmed", purpose="marketing")
+    mock_llm["state"]["result"] = PLAN
+    created = client.post("/api/v1/products/PLAN05/plans", json={
+        "scene": "测试场景", "source_ids": [fact["id"], style["id"]],
+    })
+    assert created.status_code == 201, created.text
+    materials = {item["id"]: item for item in created.json()["materials"]}
+    assert materials[fact["id"]]["role"] == "fact"
+    assert materials[style["id"]]["role"] == "style"
+
+
+def test_confirm_image_requires_angle(client):
+    from tests.helpers import make_png
+
+    client.post("/api/v1/products", json={"id": "ASSET05", "name": "视角确认测试"})
+    image = upload(client, "ASSET05", "无视角.png", make_png((9, 9, 9)))
+    response = client.put(f"/api/v1/products/ASSET05/sources/{image['id']}", json={"review_status": "confirmed"})
+    assert response.status_code == 422
+    assert error_code(response) == "angle_required_for_confirm"

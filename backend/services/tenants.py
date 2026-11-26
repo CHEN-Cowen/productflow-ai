@@ -13,8 +13,10 @@ from ..db import one, now, rows, session
 from ..errors import not_found, tenant_denied
 
 DEFAULT_TENANT = "default"
+DEFAULT_OPERATOR = "user"
 
 _tenant: ContextVar[str] = ContextVar("tenant_id", default=DEFAULT_TENANT)
+_operator: ContextVar[str] = ContextVar("operator_id", default=DEFAULT_OPERATOR)
 
 
 def current() -> str:
@@ -25,6 +27,16 @@ def set_current(tenant_id: str) -> str:
     tenant_id = (tenant_id or "").strip() or DEFAULT_TENANT
     _tenant.set(tenant_id)
     return tenant_id
+
+
+def current_operator() -> str:
+    return (_operator.get() or "").strip() or DEFAULT_OPERATOR
+
+
+def set_operator(operator_id: str) -> str:
+    operator_id = (operator_id or "").strip() or DEFAULT_OPERATOR
+    _operator.set(operator_id)
+    return operator_id
 
 
 def resolve(tenant_id: str = "") -> str:

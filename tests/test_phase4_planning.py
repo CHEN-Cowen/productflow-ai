@@ -53,7 +53,7 @@ def _confirmed(client, mock_llm, product_id: str = "CP01") -> str:
 def _create_task(client, mock_llm, product_id: str, scene: str = "抖音春节年货节") -> dict:
     from tests.helpers import PNG_1X1
 
-    image = upload(client, product_id, "01-正面.png", PNG_1X1, view_angle="front")
+    image = upload(client, product_id, "01-正面.png", PNG_1X1, view_angle="front", review_status="confirmed")
     mock_llm["state"]["result"] = PLAN
     created = client.post("/api/v1/planning/tasks", json={
         "product_id": product_id, "scene": scene, "channel": "抖音",

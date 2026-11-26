@@ -263,3 +263,41 @@ def test_version_history_and_diff(client, mock_llm):
     assert diff["changed"][0]["field"] == "body_material"
     assert diff["changed"][0]["from"] == "wool blend 70 percent"
     assert diff["changed"][0]["to"] == "full grain leather"
+
+
+def test_restore_version(client, mock_llm):
+    client.post("/api/v1/products", json={"id": "GOV08", "name": "版本恢复测试"})
+    _, first = _extract(client, mock_llm, "GOV08", LINES, ITEMS, name="v1.pdf")
+    confirm_fields(client, first["id"], FIELDS)
+
+    changed_lines = list(LINES)
+    changed_lines[1] = "Body Material: full grain leather"
+    changed_item = [dict(ITEMS[0], quote="Body Material: full grain leather", value="full grain leather")]
+    _, second = _extract(client, mock_llm, "GOV08", changed_lines, changed_item, name="v2.pdf")
+    confirm_fields(client, second["id"], {**FIELDS, "body_material": "full grain leather"},
+                   manual_basis={"lining_material": "沿用 v1 已确认资料",
+                                 "dimensions": "沿用 v1 实测尺寸", "color": "沿用 v1 实物核对"})
+
+    versions = client.get("/api/v1/products/GOV08/versions").json()
+    v1 = next(v for v in versions if v["version"] == 1)
+
+    restored = client.post(f"/api/v1/products/GOV08/versions/{v1['id']}/restore")
+    assert restored.status_code == 200
+    assert restored.json()["version"] == 3
+    assert restored.json()["fields"]["body_material"] == "wool blend 70 percent"
+    assert restored.json()["is_current"] is True
+
+    versions_after = client.get("/api/v1/products/GOV08/versions").json()
+    assert [v["version"] for v in versions_after] == [3, 2, 1]
+
+
+def test_confirm_records_operator(client, mock_llm):
+    client.post("/api/v1/products", json={"id": "GOV09", "name": "操作人测试"})
+    _, detail = _extract(client, mock_llm, "GOV09", LINES, ITEMS, name="op.pdf")
+    response = client.post(f"/api/v1/imports/{detail['id']}/confirm",
+                           json={"fields": FIELDS, "manual_basis": {}, "resolutions": [], "note": "确认"},
+                           headers={"X-Operator-Id": "reviewer-a"})
+    assert response.status_code == 200
+    provenance = client.get("/api/v1/products/GOV09").json()["latest_version"]["provenance"]
+    assert provenance["body_material"]["confirmed_by"] == "reviewer-a"
+    assert provenance["body_material"]["confirmed_at"]

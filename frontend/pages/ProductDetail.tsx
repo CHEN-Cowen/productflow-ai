@@ -125,6 +125,7 @@ function OverviewTab({ productId, detail, runs, reload }: TabProps) {
   const [impact, setImpact] = useState<any>(null);
   const [skuCode, setSkuCode] = useState("");
   const [skuAttributes, setSkuAttributes] = useState('{"color": ""}');
+  const [editingSku, setEditingSku] = useState<any>(null);
   const labels: Record<string, string> = {};
   for (const attr of detail.category.schema.attributes) labels[attr.key] = attr.label;
   const fields = detail.latest_version?.fields || {};
@@ -157,6 +158,7 @@ function OverviewTab({ productId, detail, runs, reload }: TabProps) {
       const attributes = JSON.parse(skuAttributes || "{}");
       await api.post(`/products/${productId}/skus`, { sku_code: skuCode, attributes });
       setSkuCode("");
+      setSkuAttributes('{"color": ""}');
       setMessage("SKU 已添加");
       await reload();
     } catch (err) {
@@ -164,6 +166,51 @@ function OverviewTab({ productId, detail, runs, reload }: TabProps) {
     } finally {
       setBusy("");
     }
+  }
+
+  async function saveSku() {
+    if (!editingSku) return;
+    setBusy("sku-edit");
+    setError(null);
+    setMessage("");
+    try {
+      const attributes = JSON.parse(skuAttributes || "{}");
+      await api.put(`/products/${productId}/skus/${editingSku.id}`, { sku_code: skuCode, attributes });
+      setEditingSku(null);
+      setSkuCode("");
+      setSkuAttributes('{"color": ""}');
+      setMessage("SKU 已更新");
+      await reload();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function removeSku(sku: any) {
+    if (!window.confirm(`确认删除 SKU ${sku.sku_code}？`)) return;
+    setBusy("sku-del");
+    setError(null);
+    setMessage("");
+    try {
+      await api.delete(`/products/${productId}/skus/${sku.id}`);
+      if (editingSku?.id === sku.id) setEditingSku(null);
+      setMessage("SKU 已删除");
+      await reload();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  function startEditSku(sku: any) {
+    setEditingSku(sku);
+    setSkuCode(sku.sku_code);
+    setSkuAttributes(JSON.stringify(sku.attributes, null, 2));
+    setError(null);
+    setMessage("");
   }
 
   return (
@@ -219,16 +266,22 @@ function OverviewTab({ productId, detail, runs, reload }: TabProps) {
         )}
       </Section>
 
-      <Section title={`SKU（${detail.skus.length}）`} subtitle="同一商品可管理多个 SKU，规格可与素材关联">
+      <Section title={`SKU（${detail.skus.length}）`} subtitle="同一商品可管理多个 SKU，规格可与素材关联；修改单个 SKU 不会影响其他 SKU">
         {detail.skus.length > 0 && (
           <table>
-            <thead><tr><th>SKU 编码</th><th>规格</th><th>创建时间</th></tr></thead>
+            <thead><tr><th>SKU 编码</th><th>规格</th><th>创建时间</th><th>操作</th></tr></thead>
             <tbody>
               {detail.skus.map((sku: any) => (
                 <tr key={sku.id}>
                   <td className="mono">{sku.sku_code}</td>
                   <td className="small">{JSON.stringify(sku.attributes)}</td>
                   <td className="muted small">{formatTime(sku.created_at)}</td>
+                  <td>
+                    <div className="row gap small">
+                      <button className="btn btn-small btn-ghost" disabled={!!busy} onClick={() => startEditSku(sku)}>编辑</button>
+                      <button className="btn btn-small btn-ghost" disabled={!!busy} onClick={() => removeSku(sku)}>删除</button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -241,7 +294,14 @@ function OverviewTab({ productId, detail, runs, reload }: TabProps) {
           </Field>
         </div>
         <div className="form-actions">
-          <button className="btn btn-small" disabled={!!busy || !skuCode.trim()} onClick={addSku}>{busy === "sku" ? "添加中…" : "添加 SKU"}</button>
+          {editingSku ? (
+            <>
+              <button className="btn btn-small" disabled={!!busy || !skuCode.trim()} onClick={saveSku}>{busy === "sku-edit" ? "保存中…" : "保存修改"}</button>
+              <button className="btn btn-small btn-ghost" disabled={!!busy} onClick={() => { setEditingSku(null); setSkuCode(""); setSkuAttributes('{"color": ""}'); }}>取消编辑</button>
+            </>
+          ) : (
+            <button className="btn btn-small" disabled={!!busy || !skuCode.trim()} onClick={addSku}>{busy === "sku" ? "添加中…" : "添加 SKU"}</button>
+          )}
         </div>
       </Section>
 
@@ -268,7 +328,7 @@ function OverviewTab({ productId, detail, runs, reload }: TabProps) {
   );
 }
 
-function VersionsTab({ productId, detail }: TabProps) {
+function VersionsTab({ productId, detail, reload }: TabProps) {
   const versions = detail.versions || [];
   const [from, setFrom] = useState<number | "">(versions[1]?.version ?? "");
   const [to, setTo] = useState<number | "">(versions[0]?.version ?? "");
@@ -276,6 +336,24 @@ function VersionsTab({ productId, detail }: TabProps) {
   const [impact, setImpact] = useState<any>(null);
   const [error, setError] = useState<unknown>(null);
   const [selected, setSelected] = useState<any>(versions[0] || null);
+  const [busy, setBusy] = useState("");
+  const [message, setMessage] = useState("");
+
+  async function restore(version: any) {
+    if (!window.confirm(`确认以 v${version.version} 的字段生成新版本？将追加新版本而非覆盖当前。`)) return;
+    setBusy("restore");
+    setError(null);
+    setMessage("");
+    try {
+      await api.post(`/products/${productId}/versions/${version.id}/restore`);
+      setMessage(`已恢复为 v${version.version} 的字段，生成新版本`);
+      await reload();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy("");
+    }
+  }
 
   useEffect(() => {
     Promise.all([
@@ -292,7 +370,8 @@ function VersionsTab({ productId, detail }: TabProps) {
 
   return (
     <>
-      <Section title="不可变版本历史" subtitle="确认入库后写入新版本，旧版本永久保留，可回查差异与来源">
+      {message && <div className="notice notice-success mb">{message}</div>}
+      <Section title="不可变版本历史" subtitle="确认入库后写入新版本，旧版本永久保留，可回查差异与来源；恢复操作会追加新版本而非覆盖">
         <table>
           <thead><tr><th>版本</th><th>字段</th><th>SKU</th><th>备注</th><th>确认时间</th><th></th></tr></thead>
           <tbody>
@@ -303,7 +382,14 @@ function VersionsTab({ productId, detail }: TabProps) {
                 <td className="small">{version.sku || "—"}</td>
                 <td className="small">{version.note || "—"}</td>
                 <td className="muted small">{formatTime(version.created_at)}</td>
-                <td><button className="btn btn-small btn-ghost" onClick={() => setSelected(version)}>查看字段</button></td>
+                <td>
+                  <div className="row gap small">
+                    <button className="btn btn-small btn-ghost" onClick={() => setSelected(version)}>查看字段</button>
+                    {!version.is_current && (
+                      <button className="btn btn-small btn-ghost" disabled={!!busy} onClick={() => restore(version)}>恢复</button>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>

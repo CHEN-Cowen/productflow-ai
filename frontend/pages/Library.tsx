@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ANGLES, PURPOSES, angleLabel, api, formatSize, formatTime, statusLabel } from "../api";
+import { ANGLES, ASSET_TYPES, PURPOSES, angleLabel, api, formatSize, formatTime, statusLabel } from "../api";
 import { Badge, Empty, ErrorBox, Field, Loading, Section, statusTone } from "../ui";
 import { OutputCard } from "../components";
 import { navigate, productPath } from "../router";
@@ -10,7 +10,7 @@ export default function Library() {
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
-  const [filters, setFilters] = useState({ status: "approved", kind: "", product_id: "", search: "", angle: "", review_status: "" });
+  const [filters, setFilters] = useState({ status: "approved", kind: "", product_id: "", search: "", angle: "", review_status: "", asset_type: "" });
 
   const requestId = useRef(0);
   const resultKey = JSON.stringify([tab, filters]);
@@ -43,6 +43,7 @@ export default function Library() {
         if (filters.product_id) query.set("product_id", filters.product_id);
         if (filters.angle) query.set("angle", filters.angle);
         if (filters.review_status) query.set("review_status", filters.review_status);
+        if (filters.asset_type) query.set("asset_type", filters.asset_type);
         if (filters.search) query.set("search", filters.search);
         const data = await api.get(`/assets/sources?${query.toString()}`);
         if (request === requestId.current) { setItems(data.items); setLoadedKey(resultKey); }
@@ -55,7 +56,7 @@ export default function Library() {
   }
 
   useEffect(() => { loadProducts(); }, []);
-  useEffect(() => { const timer = setTimeout(() => { void load(); }, 250); return () => clearTimeout(timer); }, [tab, filters.status, filters.kind, filters.product_id, filters.angle, filters.review_status, filters.search]);
+  useEffect(() => { const timer = setTimeout(() => { void load(); }, 250); return () => clearTimeout(timer); }, [tab, filters.status, filters.kind, filters.product_id, filters.angle, filters.review_status, filters.asset_type, filters.search]);
 
   return (
     <>
@@ -108,6 +109,12 @@ export default function Library() {
                 <select value={filters.review_status} onChange={(event) => setFilters({ ...filters, review_status: event.target.value })}>
                   <option value="">全部</option><option value="pending">待审核</option>
                   <option value="confirmed">已确认</option><option value="rejected">已废弃</option>
+                </select>
+              </Field>
+              <Field label="素材类型">
+                <select value={filters.asset_type} onChange={(event) => setFilters({ ...filters, asset_type: event.target.value })}>
+                  <option value="">全部</option>
+                  {ASSET_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                 </select>
               </Field>
             </>
