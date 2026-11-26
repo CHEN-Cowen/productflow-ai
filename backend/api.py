@@ -12,6 +12,7 @@ from . import config
 from .errors import reject
 from .providers import image as image_provider
 from .providers import llm as llm_provider
+from .providers import video as video_provider
 from .services import catalog, generation, imports, planning, runs
 
 router = APIRouter(prefix="/api/v1")
@@ -115,6 +116,8 @@ class ImageIn(BaseModel):
 
 class VideoIn(BaseModel):
     materials: list[str] = Field(default_factory=list)
+    provider: str = "ffmpeg"
+    duration: int | None = None
 
 
 class ReviewIn(BaseModel):
@@ -144,6 +147,7 @@ def models_status() -> dict[str, Any]:
     return {
         "llm": llm_provider.connectivity(),
         "image": image_provider.connectivity(),
+        "video": video_provider.connectivity(),
         "ffmpeg": {
             "available": bool(config.ffmpeg_path()),
             "ffprobe": bool(config.ffprobe_path()),

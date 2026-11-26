@@ -105,6 +105,18 @@ def image_config() -> dict[str, str]:
     }
 
 
+def video_config() -> dict[str, str]:
+    return {
+        "url": _env("VIDEO_URL"),
+        "model": _env("VIDEO_MODEL"),
+        "key": _env("VIDEO_API_KEY"),
+        "timeout": _env("VIDEO_TIMEOUT") or "300",
+        "download_timeout": _env("VIDEO_DOWNLOAD_TIMEOUT") or "120",
+        "poll_interval": _env("VIDEO_POLL_INTERVAL") or "5",
+        "poll_timeout": _env("VIDEO_POLL_TIMEOUT") or "600",
+    }
+
+
 def ffmpeg_path() -> str:
     import shutil
 
@@ -155,6 +167,7 @@ def ffmpeg_font() -> str:
 def model_status() -> dict[str, dict[str, object]]:
     llm = llm_config()
     image = image_config()
+    video = video_config()
     return {
         "llm": {
             "configured": all((llm["url"], llm["model"], llm["key"])),
@@ -165,6 +178,11 @@ def model_status() -> dict[str, dict[str, object]]:
             "configured": all((image["url"], image["model"], image["key"])),
             "model": image["model"],
             "url_configured": bool(image["url"]),
+        },
+        "video": {
+            "configured": all((video["url"], video["model"], video["key"])),
+            "model": video["model"],
+            "url_configured": bool(video["url"]),
         },
         "ffmpeg": {
             "configured": bool(ffmpeg_path()),

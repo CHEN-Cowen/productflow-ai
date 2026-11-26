@@ -9,12 +9,14 @@ from .. import config
 from ..db import dumps, loads, now, one, rows, session
 from ..errors import ApiError, conflict, not_found, reject
 from ..providers import image
+from ..providers import video as seedance
 from ..video import compose_video
 from . import catalog, planning, runs
 
 RETRYABLE = {"provider_timeout", "provider_connection", "provider_http"}
 STEPS_IMAGE = ["load_plan", "check_version", "load_references", "provider", "store", "verify"]
 STEPS_VIDEO = ["load_plan", "check_version", "select_materials", "compose", "verify"]
+STEPS_VIDEO_AI = ["load_plan", "check_version", "select_materials", "provider", "store", "verify"]
 
 
 def _plan_row(plan_id: str) -> dict[str, Any]:
@@ -42,13 +44,14 @@ def _guard(plan_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 def _attempt(plan_id: str, kind: str, attempt: int, status: str, prompt: str,
-             params: dict[str, Any], error_code: str = "", error: str = "", output_id: str = "") -> None:
+             params: dict[str, Any], error_code: str = "", error: str = "", output_id: str = "",
+             provider: str = "", model: str = "") -> None:
     with session() as db:
         db.execute(
             "INSERT INTO generation_attempts(id,plan_id,kind,attempt,status,prompt,params_json,provider,model,"
             "error_code,error,request_id,output_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (uuid4().hex, plan_id, kind, attempt, status, prompt[:3000], dumps(params),
-             "volcengine-ark" if kind == "image" else "ffmpeg", "", error_code, error[:300], "", output_id, now()),
+             provider or ("volcengine-ark" if kind == "image" else "ffmpeg"), model, error_code, error[:300], "", output_id, now()),
         )
 
 
@@ -211,13 +214,13 @@ def generate_image(plan_id: str, body: dict[str, Any]) -> dict[str, Any]:
         raise
 
 
-def _material(plan: dict[str, Any], value: str) -> Path:
+def _material(plan: dict[str, Any], value: str) -> tuple[Path, str]:
     kind, _, identifier = value.partition(":")
     if kind == "source":
         source, path = catalog.source_file(plan["product_id"], identifier)
         if not source["mime"].startswith("image/"):
             raise reject("视频镜头素材必须是图片")
-        return path
+        return path, source["mime"]
     if kind == "output":
         with session() as db:
             output = one(db, "SELECT o.* FROM outputs o JOIN plans p ON p.id=o.plan_id "
@@ -229,46 +232,108 @@ def _material(plan: dict[str, Any], value: str) -> Path:
         path = config.generated_dir() / output["filename"]
         if not path.is_file():
             raise not_found("镜头成品文件缺失")
-        return path
+        return path, output["mime"] or "image/png"
     raise reject("镜头素材格式应为 source:<id> 或 output:<id>")
+
+
+def _generate_ffmpeg(plan_id: str, prompt: str, paths: list[Path],
+                     shots: list[dict[str, Any]], run_id: str) -> list[dict[str, Any]]:
+    output_id = uuid4().hex
+    output_path = config.generated_dir() / (output_id + ".mp4")
+    info = compose_video(output_path, paths, shots)
+    runs.step(run_id, "compose", "success", f"{info['duration']} 秒")
+    runs.step(run_id, "verify", "success", f"{info['width']}x{info['height']} {info['codec']} {info['pix_fmt']}")
+    with session() as db:
+        db.execute(
+            "INSERT INTO outputs(id,plan_id,kind,filename,status,note,mime,size,provider,model,prompt,"
+            "params_json,error,attempt,source_output_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (output_id, plan_id, "video", output_path.name, "pending", "", "video/mp4",
+             output_path.stat().st_size, "ffmpeg", "libx264", prompt[:3000],
+             dumps(info), "", 1, "", now()),
+        )
+    _attempt(plan_id, "video", 1, "success", prompt, info, output_id=output_id)
+    return [get_output(output_id)]
+
+
+def _generate_seedance(plan_id: str, prompt: str,
+                       pairs: list[tuple[Path, str]], body: dict[str, Any], run_id: str) -> list[dict[str, Any]]:
+    references = [{"content": path.read_bytes(), "mime": mime} for path, mime in pairs[:1]]
+    duration = int(body.get("duration") or 12)
+    last_error: ApiError | None = None
+    for attempt in range(1, 4):
+        try:
+            results = seedance.generate(prompt, references, duration=duration)
+            break
+        except ApiError as error:
+            last_error = error
+            _attempt(plan_id, "video", attempt, "failed", prompt, {"duration": duration},
+                     error.code, error.message, provider="volcengine-ark")
+            runs.step(run_id, "provider", "failed", f"第 {attempt} 次：{error.message}")
+            if error.code not in RETRYABLE or attempt >= 3:
+                raise
+    else:  # pragma: no cover - 循环必然 break 或 raise
+        raise last_error or ApiError(502, "视频生成失败", "provider_http")
+    runs.step(run_id, "provider", "success", f"共尝试 {attempt} 次")
+    created: list[dict[str, Any]] = []
+    for item in results:
+        output_id = uuid4().hex
+        name = output_id + ".mp4"
+        path = config.generated_dir() / name
+        path.write_bytes(item["content"])
+        params = item.get("params", {})
+        try:
+            with session() as db:
+                db.execute(
+                    "INSERT INTO outputs(id,plan_id,kind,filename,status,note,mime,size,provider,model,prompt,"
+                    "params_json,error,attempt,source_output_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (output_id, plan_id, "video", name, "pending", "", "video/mp4", len(item["content"]),
+                     "volcengine-ark", item.get("model") or "", prompt, dumps(params), "", attempt, "", now()),
+                )
+        except Exception:
+            path.unlink(missing_ok=True)
+            raise
+        _attempt(plan_id, "video", attempt, "success", prompt, params, output_id=output_id,
+                 provider="volcengine-ark", model=item.get("model") or "")
+        created.append(get_output(output_id))
+    runs.step(run_id, "store", "success", f"{len(created)} 个视频已保存")
+    runs.step(run_id, "verify", "success",
+              f"{params.get('resolution', '')} {params.get('duration', '')}s")
+    return created
 
 
 def generate_video(plan_id: str, body: dict[str, Any]) -> dict[str, Any]:
     plan, _ = _guard(plan_id)
-    run_id = runs.start(plan_id, "video_generation", plan["product_id"], STEPS_VIDEO)
+    provider = str(body.get("provider") or "ffmpeg").strip().lower()
+    if provider not in {"ffmpeg", "seedance"}:
+        raise reject("视频生成方式只支持 ffmpeg 或 seedance")
+    steps = STEPS_VIDEO_AI if provider == "seedance" else STEPS_VIDEO
+    run_id = runs.start(plan_id, "video_generation", plan["product_id"], steps)
     content = loads(plan.get("content_json"), {})
     shots = content.get("shots") or []
     if not shots:
         runs.finish(run_id, "failed", "策划没有分镜", "invalid_input")
-        raise reject("策划没有分镜，无法合成视频")
+        raise reject("策划没有分镜，无法生成视频")
     materials = body.get("materials") or [f"source:{source_id}" for source_id in loads(plan["source_ids"], [])]
     if not isinstance(materials, list) or not materials:
         runs.finish(run_id, "failed", "缺少镜头素材", "invalid_input")
         raise reject("请选择至少一个镜头素材")
+    prompt = str(content.get("image_prompt") or "").strip()
+    provider_label = "volcengine-ark" if provider == "seedance" else "ffmpeg"
     try:
         runs.step(run_id, "load_plan", "success", f"{len(shots)} 个镜头")
         runs.step(run_id, "check_version", "success", f"商品版本 {plan['version_id']}")
-        paths = [_material(plan, str(item)) for item in materials]
-        runs.step(run_id, "select_materials", "success", f"{len(paths)} 个素材")
-        output_id = uuid4().hex
-        output_path = config.generated_dir() / (output_id + ".mp4")
-        info = compose_video(output_path, paths, shots)
-        runs.step(run_id, "compose", "success", f"{info['duration']} 秒")
-        runs.step(run_id, "verify", "success", f"{info['width']}x{info['height']} {info['codec']} {info['pix_fmt']}")
-        with session() as db:
-            db.execute(
-                "INSERT INTO outputs(id,plan_id,kind,filename,status,note,mime,size,provider,model,prompt,"
-                "params_json,error,attempt,source_output_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (output_id, plan_id, "video", output_path.name, "pending", "", "video/mp4",
-                 output_path.stat().st_size, "ffmpeg", "libx264", content.get("image_prompt", "")[:3000],
-                 dumps(info), "", 1, "", now()),
-            )
-        _attempt(plan_id, "video", 1, "success", content.get("image_prompt", ""), info, output_id=output_id)
+        pairs = [_material(plan, str(item)) for item in materials]
+        runs.step(run_id, "select_materials", "success", f"{len(pairs)} 个素材")
+        if provider == "seedance":
+            created = _generate_seedance(plan_id, prompt, pairs, body, run_id)
+        else:
+            paths = [path for path, _ in pairs]
+            created = _generate_ffmpeg(plan_id, prompt, paths, shots, run_id)
         runs.finish(run_id, "success")
-        return {"outputs": [get_output(output_id)], "run_id": run_id, "attempts": 1}
+        return {"outputs": created, "run_id": run_id, "attempts": 1}
     except ApiError as error:
-        _attempt(plan_id, "video", 1, "failed", content.get("image_prompt", ""), {"materials": materials},
-                 error.code, error.message)
+        _attempt(plan_id, "video", 1, "failed", prompt, {"materials": materials, "provider": provider},
+                 error.code, error.message, provider=provider_label)
         runs.finish(run_id, "failed", error.message, error.code)
         raise
     except Exception as error:  # noqa: BLE001

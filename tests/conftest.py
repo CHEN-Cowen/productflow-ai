@@ -66,3 +66,31 @@ def mock_image(monkeypatch):
 
     monkeypatch.setattr("backend.providers.image.generate", fake)
     return {"calls": calls, "state": state}
+
+
+@pytest.fixture()
+def mock_video(monkeypatch):
+    calls: list[dict] = []
+    state = {"results": None, "error": None}
+
+    def fake(prompt: str, references=None, ratio: str = "", duration: int = 12) -> list[dict]:
+        calls.append({"prompt": prompt, "references": references, "ratio": ratio, "duration": duration})
+        if state["error"] is not None:
+            raise state["error"]
+        if state["results"] is not None:
+            return state["results"]
+        return [{
+            "content": b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 2048,
+            "mime": "video/mp4",
+            "width": 0,
+            "height": 0,
+            "request_id": "req-video-test",
+            "provider": "volcengine-ark",
+            "model": "seedance-test",
+            "params": {"prompt": prompt, "resolution": "720p", "ratio": "adaptive", "duration": duration,
+                       "seed": 1, "generate_audio": False, "reference_count": len(references or []),
+                       "task_id": "cgt-test"},
+        }]
+
+    monkeypatch.setattr("backend.providers.video.generate", fake)
+    return {"calls": calls, "state": state}

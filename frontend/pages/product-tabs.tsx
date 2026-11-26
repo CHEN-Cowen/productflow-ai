@@ -858,6 +858,7 @@ export function ProductionTab(props: TabProps) {
   const [ratio, setRatio] = useState("3:4");
   const [count, setCount] = useState(1);
   const [materials, setMaterials] = useState<string[]>([]);
+  const [videoProvider, setVideoProvider] = useState("ffmpeg");
   const [busy, setBusy] = useState("");
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<unknown>(null);
@@ -898,7 +899,7 @@ export function ProductionTab(props: TabProps) {
     setError(null);
     setMessage("");
     try {
-      const body = kind === "image" ? { prompt, ratio, count } : { materials };
+      const body = kind === "image" ? { prompt, ratio, count } : { materials, provider: videoProvider };
       const result = await api.post(`/plans/${plan.id}/outputs/${kind}`, body);
       setMessage(kind === "image"
         ? `已生成 ${result.outputs.length} 张候选（尝试 ${result.attempts} 次），进入待审核队列`
@@ -951,7 +952,17 @@ export function ProductionTab(props: TabProps) {
               </div>}
               {productionKind !== "image" && <div>
                 <div className="strong mb">合成竖版短视频</div>
-                <div className="muted small mb">使用已审核商品图或原始参考图作为镜头素材；成品约 12 秒、720×1280。</div>
+                <Field label="生成方式">
+                  <select value={videoProvider} onChange={(event) => setVideoProvider(event.target.value)}>
+                    <option value="ffmpeg">FFmpeg 合成（约 12 秒 · 720×1280，免费本地合成）</option>
+                    <option value="seedance">Seedance AI 视频（图生视频，需已配置火山方舟视频模型）</option>
+                  </select>
+                </Field>
+                <div className="muted small mb">
+                  {videoProvider === "seedance"
+                    ? "使用已审核商品图作为首帧，AI 生成动态视频；输出比例跟随首帧图片。"
+                    : "使用已审核商品图或原始参考图作为镜头素材；成品约 12 秒、720×1280。"}
+                </div>
                 <div className="stack" style={{ gap: 6 }}>
                   {allMaterials.length === 0 && <div className="muted small">没有可用镜头素材</div>}
                   {allMaterials.map((item) => (
@@ -966,7 +977,7 @@ export function ProductionTab(props: TabProps) {
                 <div className="form-actions">
                   <button className="btn" disabled={!!busy || !plan.is_current_version || materials.length === 0}
                           onClick={() => generate("video")}>
-                    {busy === "video" ? `合成中… ${elapsed}s` : "合成 12 秒视频"}
+                    {busy === "video" ? `生成中… ${elapsed}s` : (videoProvider === "seedance" ? "生成 AI 视频" : "合成 12 秒视频")}
                   </button>
                 </div>
               </div>}

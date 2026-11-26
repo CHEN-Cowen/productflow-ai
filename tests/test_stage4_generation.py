@@ -140,6 +140,32 @@ def test_video_composition_verify_and_delivery(client, mock_llm, mock_image):
     assert download.headers["content-type"] == "video/mp4"
 
 
+def test_seedance_video_generation(client, mock_llm, mock_video):
+    setup = _confirmed_plan(client, mock_llm, "GEN05")
+    plan_id = setup["plan"]["id"]
+    created = client.post(f"/api/v1/plans/{plan_id}/outputs/video", json={
+        "provider": "seedance", "materials": [f"source:{setup['front']['id']}"],
+    })
+    assert created.status_code == 201, created.text
+    output = created.json()["outputs"][0]
+    assert output["kind"] == "video"
+    assert output["status"] == "pending"
+    assert output["provider"] == "volcengine-ark"
+    assert output["params"]["resolution"] == "720p"
+    assert output["params"]["duration"] == 12
+    assert mock_video["calls"][0]["duration"] == 12
+    assert mock_video["calls"][0]["references"]
+    assert (config.generated_dir() / output["filename"]).is_file()
+
+
+def test_seedance_invalid_provider_rejected(client, mock_llm):
+    setup = _confirmed_plan(client, mock_llm, "GEN06")
+    response = client.post(f"/api/v1/plans/{setup['plan']['id']}/outputs/video",
+                           json={"provider": "unknown"})
+    assert response.status_code == 422
+    assert error_code(response) == "invalid_input"
+
+
 def test_new_product_version_pauses_old_outputs(client, mock_llm, mock_image):
     setup = _confirmed_plan(client, mock_llm, "GEN03")
     plan_id = setup["plan"]["id"]
