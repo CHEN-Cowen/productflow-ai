@@ -164,7 +164,21 @@ npm run build                                      # tsc --noEmit + vite build
 - 火山方舟 Seedream 真实生图仍未成功（历史报 `SetLimitExceed`，额度问题），页面与任务记录会显示 `provider_quota` 提示；额度恢复后用 `backend.seed_demo --image` 或界面生成验证。
 - 真实 DeepSeek/方舟密钥未在本次环境提供，真实文本/生图调用未跑通；模拟结果与真实结果分开记录。
 - 原始 BP01 供应商资料未在工作区提供，当前以样例规格表和样例版本演示，未冒充已核验事实。
-- 未推送远端：本地提交已完成，推送需要仓库写权限。
+
+## Git
+
+提交已推送到 `main`，远端哈希与本地一致：
+
+```
+89e2e08 fix: 兼容旧版无扩展名资料的预览与大小回填
+03fd1ef docs: 启动、配置、演示与验收说明
+79d3eeb feat(frontend): 多页面工作台与共享商品详情
+fd4ecaa test: 覆盖五阶段关键案例的后端测试
+cffb327 feat(backend): 商品数据治理与内容生产服务
+34f72ec fix: 恢复阶段二至五源码目录并接回前后端入口
+```
+
+`data/`、`node_modules/`、`dist/`、`.venv/`、`.env`、BP01 原始资料与参考图、题目文档均未提交。
 
 ## 与 PRD 的差异
 
