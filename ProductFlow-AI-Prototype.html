@@ -1,0 +1,1890 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ProductFlow AI · 商品内容工作台</title>
+<style>
+/* ============ 设计令牌 ============ */
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --surface-2:#f1f2f5; --surface-3:#fafafa;
+  --text:#1d2129; --text-2:#5c6470; --text-3:#9aa1ac;
+  --brand:#5a5fd6; --brand-2:#6f74e8; --brand-weak:#eeedfb; --brand-strong:#474bc4;
+  --success:#16a34a; --success-weak:#e8f7ee;
+  --info:#2563eb; --info-weak:#e9f1ff;
+  --warning:#d97706; --warning-weak:#fdf3e2;
+  --danger:#dc2626; --danger-weak:#fdeaea;
+  --muted:#8a919c; --muted-weak:#f1f2f5;
+  --line:#e7e8ec; --line-2:#eef0f3;
+  --shadow:0 1px 2px rgba(20,24,33,.04),0 4px 16px rgba(20,24,33,.05);
+  --shadow-lg:0 8px 30px rgba(20,24,33,.12);
+  --r-sm:8px; --r:10px; --r-lg:14px;
+  --sidebar-w:256px; --header-h:60px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font);color:var(--text);background:var(--bg);font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select,textarea{font-family:inherit;font-size:14px;color:var(--text)}
+a{color:var(--brand);text-decoration:none}
+a:hover{text-decoration:underline}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#d3d6dc;border-radius:6px;border:2px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:#b9bec7;background-clip:content-box}
+
+/* ============ 布局 ============ */
+.shell{display:grid;grid-template-columns:var(--sidebar-w) 1fr;grid-template-rows:var(--header-h) 1fr;height:100vh;grid-template-areas:"side head" "side main"}
+.side{grid-area:side;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+.head{grid-area:head;background:rgba(255,255,255,.9);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:0 20px;position:relative;z-index:20}
+.main{grid-area:main;overflow:auto;position:relative}
+.view{max-width:1240px;margin:0 auto;padding:28px 32px 64px}
+
+/* ============ 侧边栏 ============ */
+.brand{display:flex;align-items:center;gap:10px;padding:18px 20px 16px}
+.brand .mark{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;flex:none}
+.brand b{font-size:15px;letter-spacing:.2px}
+.brand small{display:block;color:var(--text-3);font-size:11px;font-weight:400;margin-top:-1px}
+.nav-scroll{flex:1;overflow:auto;padding:4px 12px 16px}
+.nav-group{margin-top:8px}
+.nav-group>.cap{display:flex;align-items:center;gap:8px;padding:9px 10px;font-size:11px;font-weight:600;color:var(--text-3);letter-spacing:.6px;text-transform:uppercase}
+.nav-group>.cap .ic{width:15px;height:15px}
+.nav-item{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border-radius:8px;color:var(--text-2);font-size:13.5px;text-align:left;transition:background .12s,color .12s}
+.nav-item:hover{background:var(--surface-2);color:var(--text)}
+.nav-item .ic{width:17px;height:17px;flex:none;opacity:.85}
+.nav-item.on{background:var(--brand-weak);color:var(--brand-strong);font-weight:600}
+.nav-item.on .ic{opacity:1}
+.nav-item .pin{margin-left:auto;font-size:10px;color:var(--brand);background:#fff;border:1px solid var(--brand);border-radius:20px;padding:1px 7px}
+.side-foot{border-top:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:10px}
+.side-foot .ava{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#c7cbf5,#9aa0e8);color:#3d3f8f;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none}
+.side-foot .who{font-size:13px;font-weight:600}
+.side-foot .role{font-size:11px;color:var(--text-3)}
+.side-foot .spacer{flex:1}
+
+/* ============ 顶栏 ============ */
+.crumb{display:flex;align-items:center;gap:6px;color:var(--text-3);font-size:13px;white-space:nowrap}
+.crumb .sep{opacity:.5}
+.crumb b{color:var(--text);font-weight:600}
+.head .spacer{flex:1}
+.head .ctx{display:flex;align-items:center;gap:7px;background:var(--surface-2);border:1px solid var(--line-2);border-radius:8px;padding:6px 10px;font-size:12.5px;color:var(--text-2)}
+.head .ctx .dot{width:7px;height:7px;border-radius:50%;background:var(--success)}
+.icon-btn{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--text-2);position:relative;transition:background .12s}
+.icon-btn:hover{background:var(--surface-2);color:var(--text)}
+.icon-btn .ic{width:19px;height:19px}
+.icon-btn .badge{position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--danger);border:2px solid #fff}
+.searchbox{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line-2);border-radius:9px;padding:7px 11px;width:220px}
+.searchbox .ic{width:16px;height:16px;color:var(--text-3)}
+.searchbox input{border:none;background:none;outline:none;width:100%;font-size:13px}
+
+/* ============ 通用组件 ============ */
+.h1{font-size:22px;font-weight:700;letter-spacing:-.2px}
+.page-head{margin-bottom:20px}
+.page-head .row{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.page-head .desc{color:var(--text-2);margin-top:6px;max-width:760px;font-size:13.5px}
+.page-head .actions{margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.lead{margin-top:14px;color:var(--text-3);font-size:12px}
+
+.btn{display:inline-flex;align-items:center;gap:7px;padding:8px 15px;border-radius:9px;font-size:13.5px;font-weight:600;border:1px solid transparent;transition:background .12s,box-shadow .12s,transform .04s;white-space:nowrap}
+.btn:active{transform:translateY(1px)}
+.btn .ic{width:16px;height:16px}
+.btn-primary{background:var(--brand);color:#fff}
+.btn-primary:hover{background:var(--brand-strong)}
+.btn-secondary{background:var(--surface);border-color:var(--line);color:var(--text)}
+.btn-secondary:hover{background:var(--surface-2)}
+.btn-ghost{color:var(--text-2)}
+.btn-ghost:hover{background:var(--surface-2);color:var(--text)}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-danger:hover{background:#b91c1c}
+.btn-soft{background:var(--brand-weak);color:var(--brand-strong)}
+.btn-soft:hover{background:#e2e0f9}
+.btn-sm{padding:5px 11px;font-size:12.5px;border-radius:8px}
+.btn-xs{padding:3px 8px;font-size:12px;border-radius:7px;font-weight:500}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+
+.input,select.input,textarea.input{width:100%;padding:8px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;outline:none;transition:border .12s,box-shadow .12s}
+.input:focus,select.input:focus,textarea.input:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-weak)}
+textarea.input{resize:vertical;min-height:80px}
+.field{margin-bottom:14px}
+.field>label{display:block;font-size:12.5px;font-weight:600;color:var(--text-2);margin-bottom:6px}
+.field>label .req{color:var(--danger)}
+.field .hint{font-size:12px;color:var(--text-3);margin-top:5px}
+.row{display:flex;gap:12px}
+.row>*{flex:1}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow)}
+.card.pad{padding:20px}
+.card-h{display:flex;align-items:center;gap:10px;padding:16px 20px;border-bottom:1px solid var(--line-2)}
+.card-h h3{font-size:15px;font-weight:700}
+.card-h .sub{color:var(--text-3);font-size:12.5px}
+.card-h .actions{margin-left:auto;display:flex;gap:8px}
+.card-b{padding:20px}
+
+/* 统计卡 */
+.stats{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:20px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px;box-shadow:var(--shadow)}
+.stat .lbl{font-size:12.5px;color:var(--text-2);display:flex;align-items:center;gap:6px}
+.stat .lbl .ic{width:15px;height:15px}
+.stat .num{font-size:26px;font-weight:700;letter-spacing:-.5px;margin-top:6px}
+.stat .sub{font-size:11.5px;color:var(--text-3);margin-top:2px}
+.stat.clickable{cursor:pointer;transition:border .12s,box-shadow .12s}
+.stat.clickable:hover{border-color:var(--brand);box-shadow:var(--shadow-lg)}
+
+/* 标签 */
+.tag{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:20px;font-size:12px;font-weight:600;line-height:1.7;white-space:nowrap}
+.tag .ic{width:12px;height:12px}
+.tag.gray{background:var(--muted-weak);color:#6b7280}
+.tag.blue{background:var(--info-weak);color:var(--info)}
+.tag.green{background:var(--success-weak);color:var(--success)}
+.tag.orange{background:var(--warning-weak);color:var(--warning)}
+.tag.red{background:var(--danger-weak);color:var(--danger)}
+.tag.purple{background:var(--brand-weak);color:var(--brand-strong)}
+.tag.dot::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+
+/* 表格 */
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
+.tbl th{text-align:left;padding:11px 14px;color:var(--text-3);font-size:12px;font-weight:600;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--surface-3)}
+.tbl td{padding:13px 14px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+.tbl tbody tr{transition:background .1s}
+.tbl tbody tr:hover{background:var(--surface-2)}
+.tbl tbody tr.clickable{cursor:pointer}
+.tbl .num{font-variant-numeric:tabular-nums}
+.tbl .act{display:flex;gap:6px}
+
+/* 商品单元格 */
+.cell-prod{display:flex;align-items:center;gap:11px}
+.thumb{width:42px;height:42px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;overflow:hidden}
+.thumb .ic{width:22px;height:22px;opacity:.95}
+.cell-prod .nm{font-weight:600}
+.cell-prod .cd{font-size:12px;color:var(--text-3)}
+
+/* 筛选栏 */
+.filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+.filters .input,.filters select.input{width:auto;min-width:150px}
+.filters .spacer{flex:1}
+
+/* 进度条 */
+.progress{height:7px;background:var(--surface-2);border-radius:20px;overflow:hidden;min-width:80px}
+.progress>i{display:block;height:100%;background:var(--brand);border-radius:20px;transition:width .4s}
+.progress.blue>i{background:var(--info)}
+.progress.green>i{background:var(--success)}
+.progress.orange>i{background:var(--warning)}
+
+/* 分页 */
+.pager{display:flex;align-items:center;gap:6px;justify-content:flex-end;margin-top:16px;color:var(--text-2);font-size:13px}
+.pager button{min-width:30px;height:30px;border-radius:8px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:13px}
+.pager button.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.pager button[disabled]{opacity:.4;cursor:not-allowed}
+
+/* 步骤条 */
+.stepper{display:flex;align-items:center;gap:0;margin:6px 0 22px}
+.step{display:flex;align-items:center;gap:8px;flex:1}
+.step .dot{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;color:var(--text-3);flex:none;background:#fff}
+.step .txt{font-size:12.5px;color:var(--text-3);font-weight:600}
+.step .txt small{display:block;font-weight:400;color:var(--text-3);font-size:11px}
+.step.on .dot{background:var(--brand);border-color:var(--brand);color:#fff}
+.step.on .txt{color:var(--text)}
+.step.done .dot{background:var(--success-weak);border-color:var(--success);color:var(--success)}
+.step .line{flex:1;height:2px;background:var(--line);margin:0 10px}
+.step:last-child .line{display:none}
+
+/* 选项卡 */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:20px;overflow:auto}
+.tab{padding:9px 15px;font-size:13.5px;font-weight:600;color:var(--text-2);border-bottom:2px solid transparent;white-space:nowrap;margin-bottom:-1px}
+.tab:hover{color:var(--text)}
+.tab.on{color:var(--brand-strong);border-bottom-color:var(--brand)}
+
+/* 上传区 */
+.dropzone{border:2px dashed var(--line);border-radius:var(--r-lg);padding:32px;text-align:center;color:var(--text-2);cursor:pointer;transition:border .12s,background .12s;background:var(--surface-3)}
+.dropzone:hover,.dropzone.over{border-color:var(--brand);background:var(--brand-weak)}
+.dropzone .ic{width:34px;height:34px;color:var(--brand);margin-bottom:8px}
+
+/* 文件列表 */
+.filelist{display:flex;flex-direction:column;gap:8px}
+.file{display:flex;align-items:center;gap:11px;border:1px solid var(--line);border-radius:10px;padding:11px 13px}
+.file .fic{width:36px;height:36px;border-radius:8px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;color:var(--text-2);flex:none}
+.file .fic .ic{width:18px;height:18px}
+.file .meta{flex:1;min-width:0}
+.file .meta b{font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file .meta span{font-size:12px;color:var(--text-3)}
+
+/* 弹窗 */
+.modal-mask{position:fixed;inset:0;background:rgba(20,24,33,.4);display:flex;align-items:flex-start;justify-content:center;padding:48px 20px;z-index:100;animation:fade .15s}
+.modal{background:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow-lg);width:100%;max-width:640px;max-height:calc(100vh - 96px);overflow:auto;animation:pop .18s}
+.modal.lg{max-width:900px}
+.modal-h{display:flex;align-items:center;gap:10px;padding:18px 22px;border-bottom:1px solid var(--line-2);position:sticky;top:0;background:#fff;z-index:2}
+.modal-h h3{font-size:16px;font-weight:700;flex:1}
+.modal-b{padding:22px}
+.modal-f{display:flex;gap:10px;justify-content:flex-end;padding:16px 22px;border-top:1px solid var(--line-2);position:sticky;bottom:0;background:#fff}
+@keyframes fade{from{opacity:0}}
+@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}}
+
+/* Toast */
+#toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px;align-items:center}
+.toast{display:flex;align-items:center;gap:9px;background:#1d2129;color:#fff;padding:11px 17px;border-radius:10px;font-size:13.5px;box-shadow:var(--shadow-lg);animation:pop .2s;max-width:480px}
+.toast .ic{width:17px;height:17px;flex:none}
+.toast.success .ic{color:#4ade80}
+.toast.error .ic{color:#f87171}
+.toast.info .ic{color:#93c5fd}
+
+/* 空状态 */
+.empty{text-align:center;padding:52px 20px;color:var(--text-2)}
+.empty .art{width:64px;height:64px;border-radius:16px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;color:var(--text-3)}
+.empty .art .ic{width:30px;height:30px}
+.empty h4{font-size:15px;color:var(--text);margin-bottom:6px}
+.empty p{font-size:13px;color:var(--text-2);max-width:420px;margin:0 auto 16px}
+.empty .actions{display:flex;gap:10px;justify-content:center}
+
+/* 提示条 */
+.alert{display:flex;gap:10px;align-items:flex-start;border-radius:10px;padding:12px 14px;font-size:13px;margin-bottom:14px}
+.alert .ic{width:17px;height:17px;flex:none;margin-top:1px}
+.alert.info{background:var(--info-weak);color:#1e40af}
+.alert.warn{background:var(--warning-weak);color:#92400e}
+.alert.error{background:var(--danger-weak);color:#991b1b}
+.alert.success{background:var(--success-weak);color:#166534}
+.alert .x{margin-left:auto;cursor:pointer;opacity:.6}
+.alert .x:hover{opacity:1}
+
+/* 三栏工作区（数据清洗） */
+.threecol{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.threecol .pane{border:1px solid var(--line);border-radius:var(--r-lg);background:#fff;display:flex;flex-direction:column;min-height:520px;overflow:hidden}
+.pane-h{padding:13px 16px;border-bottom:1px solid var(--line-2);display:flex;align-items:center;gap:8px;background:var(--surface-3)}
+.pane-h .ic{width:16px;height:16px;color:var(--brand)}
+.pane-h b{font-size:13.5px}
+.pane-h .cap{font-size:11px;color:var(--text-3);margin-left:auto}
+.pane-b{padding:14px;overflow:auto;flex:1}
+
+/* 字段对照 */
+.map-row{border:1px solid var(--line-2);border-radius:10px;padding:10px 12px;margin-bottom:9px;background:var(--surface-3)}
+.map-row .k{font-size:12px;color:var(--text-3);display:flex;align-items:center;gap:6px}
+.map-row .v{font-size:13.5px;font-weight:600;margin-top:3px}
+.map-row .v .tag{margin-left:6px;vertical-align:middle}
+.map-row .evi{font-size:11.5px;color:var(--text-3);margin-top:3px;display:flex;align-items:center;gap:5px;cursor:pointer}
+.map-row .evi:hover{color:var(--brand)}
+
+/* 卖点卡片 */
+.sp-card{border:1px solid var(--line);border-radius:var(--r-lg);padding:16px;background:#fff;margin-bottom:12px;transition:border .12s,box-shadow .12s}
+.sp-card:hover{border-color:var(--brand);box-shadow:var(--shadow)}
+.sp-card .top{display:flex;align-items:flex-start;gap:10px}
+.sp-card .top .grip{margin-top:3px;color:var(--text-3);cursor:grab}
+.sp-card h4{font-size:14.5px;font-weight:700}
+.sp-card .basis{font-size:12px;color:var(--text-2);margin-top:3px}
+.sp-card .bottom{display:flex;align-items:center;gap:8px;margin-top:12px}
+
+/* 创意方案卡 */
+.concepts{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.concept{border:1px solid var(--line);border-radius:var(--r-lg);background:#fff;overflow:hidden;display:flex;flex-direction:column;transition:border .12s,box-shadow .12s}
+.concept:hover{box-shadow:var(--shadow)}
+.concept.selected{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-weak)}
+.concept .cv{height:120px;background:var(--surface-2);display:flex;align-items:center;justify-content:center;color:#fff}
+.concept .cv .ic{width:34px;height:34px}
+.concept .cb{padding:15px;flex:1;display:flex;flex-direction:column}
+.concept .cb h4{font-size:14.5px;font-weight:700}
+.concept .cb .pos{font-size:12px;color:var(--brand);font-weight:600;margin-top:2px}
+.concept .cb p{font-size:12.5px;color:var(--text-2);margin-top:6px}
+.concept .cb .meta{margin-top:10px;font-size:11.5px;color:var(--text-3)}
+.concept .cf{padding:12px 15px;border-top:1px solid var(--line-2);display:flex;gap:8px}
+
+/* 图片策划卡 */
+.imgplan-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.imgcard{border:1px solid var(--line);border-radius:var(--r-lg);background:#fff;overflow:hidden;display:flex;flex-direction:column}
+.imgcard .iv{height:130px;background:var(--surface-2);position:relative;display:flex;align-items:center;justify-content:center;color:#fff}
+.imgcard .iv .num{position:absolute;top:10px;left:10px;background:rgba(20,24,33,.55);color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px}
+.imgcard .iv .ic{width:32px;height:32px}
+.imgcard .ib{padding:13px}
+.imgcard .ib h4{font-size:13.5px;font-weight:700}
+.imgcard .ib p{font-size:12px;color:var(--text-2);margin-top:4px}
+.imgcard .ib .spec{margin-top:9px;font-size:11.5px;color:var(--text-3);display:flex;flex-wrap:wrap;gap:4px}
+.imgcard .ib .spec span{background:var(--surface-2);padding:2px 7px;border-radius:6px}
+.imgcard .if{padding:10px 13px;border-top:1px solid var(--line-2);display:flex;gap:7px}
+
+/* 视频分镜 */
+.video-meta{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.video-meta .vm{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:11px 15px;min-width:130px}
+.video-meta .vm .l{font-size:11.5px;color:var(--text-3)}
+.video-meta .vm .v{font-size:15px;font-weight:700;margin-top:2px}
+.timeline{display:flex;height:38px;border-radius:8px;overflow:hidden;margin-bottom:14px;border:1px solid var(--line)}
+.timeline .seg{display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden}
+.shot{border:1px solid var(--line);border-radius:var(--r-lg);background:#fff;margin-bottom:12px;overflow:hidden}
+.shot-h{display:flex;align-items:center;gap:10px;padding:12px 15px;border-bottom:1px solid var(--line-2);background:var(--surface-3)}
+.shot-h .idx{width:26px;height:26px;border-radius:8px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none}
+.shot-h .dur{font-size:12px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.shot-h .spacer{flex:1}
+.shot-b{padding:15px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.shot-b .col{display:flex;flex-direction:column;gap:9px}
+.shot-b .kv{font-size:12.5px}
+.shot-b .kv b{display:block;font-size:11.5px;color:var(--text-3);font-weight:600;margin-bottom:2px}
+
+/* 版本对比 */
+.diff-table{width:100%;border-collapse:collapse;font-size:13px}
+.diff-table th,.diff-table td{padding:9px 12px;border-bottom:1px solid var(--line-2);text-align:left}
+.diff-table th{color:var(--text-3);font-size:12px;font-weight:600}
+.diff-table .del{color:var(--danger);text-decoration:line-through;background:var(--danger-weak)}
+.diff-table .add{color:var(--success);background:var(--success-weak)}
+
+/* 分组属性 */
+.attr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.attr-group{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px}
+.attr-group h4{font-size:13px;font-weight:700;color:var(--text);margin-bottom:11px;display:flex;align-items:center;gap:7px}
+.attr-group h4 .ic{width:15px;height:15px;color:var(--brand)}
+.attr-group .av{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line-2);font-size:13px}
+.attr-group .av:last-child{border-bottom:none}
+.attr-group .av .k{color:var(--text-2);flex:none}
+.attr-group .av .val{font-weight:500;text-align:right}
+.attr-group .av .src{font-size:11px;color:var(--brand);cursor:pointer;margin-top:1px}
+.attr-group .av .src:hover{text-decoration:underline}
+
+/* 关联信息条 */
+.chain{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.chain .node{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:12.5px}
+.chain .node .ic{width:15px;height:15px;color:var(--brand)}
+.chain .arr{color:var(--text-3)}
+
+/* 徽标 */
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:20px;font-size:12px;font-weight:600;background:var(--surface-2);color:var(--text-2)}
+
+/* 两栏 */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-2-1{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+.mt{margin-top:16px}.mb{margin-bottom:16px}.flex{display:flex}.aic{align-items:center}.gap8{gap:8px}.gap12{gap:12px}.muted{color:var(--text-3)}.small{font-size:12px}.bold{font-weight:600}
+
+/* 商品详情头部 */
+.pd-hero{display:flex;gap:20px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:20px;box-shadow:var(--shadow)}
+.pd-hero .img{width:130px;height:130px;border-radius:12px;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;overflow:hidden}
+.pd-hero .img .ic{width:54px;height:54px}
+.pd-hero .info{flex:1}
+.pd-hero .info h2{font-size:19px;font-weight:700}
+.pd-hero .info .meta{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;color:var(--text-2);font-size:13px}
+.pd-hero .info .meta span{display:inline-flex;align-items:center;gap:5px}
+.pd-hero .info .tags{display:flex;gap:8px;margin-top:12px}
+.pd-hero .side{display:flex;flex-direction:column;gap:9px;align-items:flex-end}
+
+/* 响应式 */
+@media (max-width:1080px){
+  .stats{grid-template-columns:repeat(3,1fr)}
+  .attr-grid{grid-template-columns:repeat(2,1fr)}
+  .threecol{grid-template-columns:1fr}
+  .concepts,.imgplan-grid{grid-template-columns:1fr 1fr}
+}
+@media (max-width:860px){
+  .shell{grid-template-columns:1fr;grid-template-rows:var(--header-h) 1fr;grid-template-areas:"head" "main"}
+  .side{position:fixed;left:0;top:0;bottom:0;width:var(--sidebar-w);transform:translateX(-100%);transition:transform .2s;z-index:50}
+  .side.open{transform:translateX(0);box-shadow:var(--shadow-lg)}
+  .menu-toggle{display:flex!important}
+  .searchbox{display:none}
+  .ctx{display:none}
+  .view{padding:20px 16px 56px}
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .attr-grid,.concepts,.imgplan-grid,.grid-2,.grid-2-1,.shot-b{grid-template-columns:1fr}
+  .pd-hero{flex-direction:column}
+}
+.menu-toggle{display:none}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side" id="side">
+    <div class="brand">
+      <span class="mark">P</span>
+      <div><b>ProductFlow AI</b><small>商品内容工作台</small></div>
+    </div>
+    <div class="nav-scroll" id="navScroll"></div>
+    <div class="side-foot">
+      <span class="ava">林</span>
+      <div><div class="who">林运营</div><div class="role">内容运营 · 演示账号</div></div>
+      <span class="spacer"></span>
+      <button class="icon-btn" title="恢复演示数据" onclick="resetData()"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+    </div>
+  </aside>
+  <header class="head">
+    <button class="icon-btn menu-toggle" onclick="toggleSide()" title="菜单"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+    <div class="crumb" id="crumb"></div>
+    <span class="spacer"></span>
+    <div class="ctx"><span class="dot"></span><span id="ctxText">演示工作区 · 模拟数据</span></div>
+    <div class="searchbox"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="globalSearch" placeholder="搜索商品 / 任务…" oninput="globalSearch(this.value)"></div>
+    <button class="icon-btn" title="通知"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="badge"></span></button>
+    <button class="icon-btn" title="账户"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg></button>
+  </header>
+  <main class="main" id="main">
+    <div class="view" id="view"></div>
+  </main>
+</div>
+<div id="modalRoot"></div>
+<div id="toast"></div>
+
+<script>
+"use strict";
+/* ================= 图标库 ================= */
+const IC={
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  box:'<path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/>',
+  upload:'<path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 20h16"/>',
+  sparkle:'<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16z"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  checkCircle:'<circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
+  alert:'<circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16.5v.01"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8v.01"/>',
+  close:'<path d="M18 6 6 18M6 6l12 12"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  edit:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>',
+  trash:'<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>',
+  arrowLeft:'<path d="M19 12H5"/><path d="m12 19-7-7 7-7"/>',
+  arrowRight:'<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+  chevronDown:'<path d="m6 9 6 6 6-6"/>',
+  chevronRight:'<path d="m9 6 6 6-6 6"/>',
+  up:'<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>',
+  down:'<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>',
+  doc:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8M8 9h2"/>',
+  image:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>',
+  video:'<rect x="2" y="5" width="14" height="14" rx="2"/><path d="m16 10 6-3v10l-6-3"/>',
+  eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  filter:'<path d="M3 5h18l-7 8v5l-4 2v-7L3 5z"/>',
+  refresh:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>',
+  download:'<path d="M12 4v12"/><path d="m7 11 5 5 5-5"/><path d="M4 20h16"/>',
+  copy:'<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
+  more:'<circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/>',
+  link:'<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5"/>',
+  bag:'<path d="M6 8h12l-1 12H7L6 8z"/><path d="M9 8a3 3 0 0 1 6 0"/>',
+  shirt:'<path d="M8 3 4 7l3 2 1-2 4 4 4-4 1 2 3-2-4-4a4 4 0 0 1-8 0z"/><path d="M9 12v8h6v-8"/>',
+  shoe:'<path d="M3 15c0-4 3-6 8-7l3 2c3 1 5 3 6 6l1 4H3v-5z"/><path d="M9 12l2-2"/>',
+  jar:'<rect x="7" y="3" width="10" height="5" rx="1"/><path d="M8 8h8l-1 12a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1L8 8z"/><path d="M10 12v5M14 12v5"/>',
+  list:'<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>',
+  users:'<circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-5 6-5s6 1.7 6 5"/><path d="M16 5a3 3 0 0 1 0 6M21 20c0-2.6-1.5-4.3-4-4.9"/>',
+  target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+  palette:'<path d="M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 0-4h-1a1.5 1.5 0 0 1 0-3h4a4 4 0 0 0 4-4c0-4-3.6-7-8-7z"/><circle cx="7.5" cy="11.5" r="1"/><circle cx="11" cy="7.5" r="1"/><circle cx="15.5" cy="7.5" r="1"/>',
+  layers:'<path d="m12 2 9 5-9 5-9-5 9-5z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/>',
+  flag:'<path d="M5 21V4"/><path d="M5 4h13l-2 4 2 4H5"/>',
+  archive:'<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v11h14V9"/><path d="M10 13h4"/>',
+  workflow:'<rect x="3" y="4" width="6" height="6" rx="1"/><rect x="15" y="14" width="6" height="6" rx="1"/><path d="M9 7h3a3 3 0 0 1 3 3v1"/><path d="M9 17h3a3 3 0 0 0 3-3v-1"/>'
+};
+function ic(name,size){return '<svg class="ic" viewBox="0 0 24 24" width="'+(size||16)+'" height="'+(size||16)+'" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+(IC[name]||IC.box)+'</svg>';}
+
+/* ================= 工具 ================= */
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const now=()=>new Date().toISOString();
+const fmtTime=t=>{if(!t)return'—';const d=new Date(t);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
+const fmtDate=t=>fmtTime(t).slice(0,10);
+function uid(p){return p+'-'+Math.random().toString(36).slice(2,8);}
+function toast(msg,type){type=type||'info';const box=document.getElementById('toast');const t=document.createElement('div');t.className='toast '+type;t.innerHTML=ic(type==='success'?'checkCircle':type==='error'?'alert':'info',16)+'<span>'+esc(msg)+'</span>';box.appendChild(t);setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(()=>t.remove(),300);},2600);}
+function openModal(html,large){const r=document.getElementById('modalRoot');r.innerHTML='<div class="modal-mask" onclick="if(event.target===this)closeModal()"><div class="modal'+(large?' lg':'')+'">'+html+'</div></div>';}
+function closeModal(){document.getElementById('modalRoot').innerHTML='';}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+
+/* ================= 数据模型 ================= */
+const LS_KEY='productflow_ai_v2';
+function seedData(){
+  const t0='2026-11-18T09:30:00';
+  const products=[
+    {
+      id:'BP01',name:'女士双肩包',code:'BP01',category:'箱包',brand:'KELIN·客邻',status:'confirmed',statusNote:'已确认',currentVersion:2,
+      color:'#5a5fd6',icon:'bag',desc:'轻量通勤双肩包，兼顾日常通勤与短途出行，主仓大容量，背部缓冲透气。',
+      groups:[
+        {title:'基础信息',icon:'box',fields:[['商品名称','女士双肩包'],['商品编码','BP01'],['品牌','KELIN·客邻'],['品类','箱包'],['商品描述','轻量通勤双肩包'],['商品状态','正常在售']]},
+        {title:'规格信息',icon:'layers',fields:[['商品颜色','暖米白 / 黑色 / 深棕'],['商品尺寸','28×24×12 cm'],['商品重量','650 g'],['商品容量','18 L'],['包装规格','单个独立防尘袋']]},
+        {title:'材质信息',icon:'layers',fields:[['主体材质','70% 羊毛 / 30% 聚酯纤维'],['内里材质','涤纶'],['辅料材质','合金五金'],['材质成分比例','羊毛70% / 聚酯30%']]},
+        {title:'外观信息',icon:'palette',fields:[['商品颜色','暖米白'],['商品结构','翻盖 + 主仓 + 前袋 + 侧袋'],['外观细节','圆角翻盖、磁吸扣、铆钉装饰'],['配件信息','可拆卸肩带']]},
+        {title:'商业信息',icon:'target',fields:[['商品卖点','羊毛混纺、轻量通勤'],['适用场景','通勤 / 日常出行'],['目标人群','25-40 岁都市女性'],['商品定位','轻奢通勤']]}
+      ],
+      skus:[
+        {code:'BP01-01',color:'暖米白',size:'标准款',status:'confirmed'},
+        {code:'BP01-02',color:'黑色',size:'标准款',status:'confirmed'},
+        {code:'BP01-03',color:'深棕色',size:'标准款',status:'pending'}
+      ],
+      sources:[
+        {id:'src-bp01-1',name:'BP01-规格表.xlsx',type:'excel',size:'42 KB',status:'parsed',angle:'正面',time:t0},
+        {id:'src-bp01-2',name:'BP01-详情页.pdf',type:'pdf',size:'1.8 MB',status:'parsed',angle:'正面',time:t0},
+        {id:'src-bp01-3',name:'BP01-正面.png',type:'image',size:'2.4 MB',status:'ok',angle:'正面',time:t0},
+        {id:'src-bp01-4',name:'BP01-内里.png',type:'image',size:'2.1 MB',status:'ok',angle:'内里',time:t0}
+      ],
+      versions:[
+        {v:1,time:'2026-11-18T09:30:00',by:'系统导入',note:'初始商品档案',status:'已发布',changes:[{f:'商品尺寸',before:'—',after:'28×24×12 cm',reason:'初始提取'}]},
+        {v:2,time:'2026-11-20T14:10:00',by:'林运营',note:'更新材质与尺寸',status:'已发布',changes:[{f:'商品尺寸',before:'28×24×12 cm',after:'28×24×12 cm',reason:'冲突确认，选定规格表来源'},{f:'主体材质',before:'羊毛混纺',after:'70% 羊毛 / 30% 聚酯纤维',reason:'补充分成比例'}]}
+      ]
+    },
+    {
+      id:'CL01',name:'法式碎花连衣裙',code:'CL01',category:'服饰',brand:'KELIN·客邻',status:'pending',statusNote:'待审核',currentVersion:1,
+      color:'#d96a8b',icon:'shirt',desc:'法式方领碎花连衣裙，收腰 A 字版型，适合春夏通勤与度假。',
+      groups:[
+        {title:'基础信息',icon:'box',fields:[['商品名称','法式碎花连衣裙'],['商品编码','CL01'],['品牌','KELIN·客邻'],['品类','服饰'],['商品描述','法式方领收腰连衣裙'],['商品状态','待上架']]},
+        {title:'规格信息',icon:'layers',fields:[['商品尺码','S / M / L / XL'],['商品版型','A 字收腰'],['商品裙长','中长款'],['商品颜色','碎花 / 米白底'],['袖长','短袖']]},
+        {title:'面料信息',icon:'layers',fields:[['面料成分','100% 粘胶纤维'],['里料','无'],['面料克重','120 g/㎡'],['弹性','微弹']]},
+        {title:'商业信息',icon:'target',fields:[['商品卖点','法式碎花、收腰显瘦'],['适用场景','通勤 / 度假'],['目标人群','22-35 岁女性'],['商品定位','轻法式女装']]}
+      ],
+      skus:[
+        {code:'CL01-01',color:'碎花',size:'S',status:'pending'},
+        {code:'CL01-02',color:'碎花',size:'M',status:'pending'},
+        {code:'CL01-03',color:'碎花',size:'L',status:'pending'}
+      ],
+      sources:[
+        {id:'src-cl01-1',name:'CL01-商品资料.docx',type:'word',size:'96 KB',status:'parsed',angle:'正面',time:'2026-11-22T10:00:00'},
+        {id:'src-cl01-2',name:'CL01-尺码表.xlsx',type:'excel',size:'28 KB',status:'parsed',angle:'正面',time:'2026-11-22T10:00:00'}
+      ],
+      versions:[
+        {v:1,time:'2026-11-22T10:00:00',by:'系统导入',note:'初始提取（待人工审核）',status:'待审核',changes:[{f:'全部字段',before:'—',after:'候选值',reason:'初始提取'}]}
+      ]
+    },
+    {
+      id:'SH01',name:'轻量缓震运动鞋',code:'SH01',category:'鞋靴',brand:'KELIN·客邻',status:'confirmed',statusNote:'已确认',currentVersion:1,
+      color:'#2f7d6d',icon:'shoe',desc:'轻量缓震跑步鞋，透气网面，回弹中底，适合日常慢跑与健身。',
+      groups:[
+        {title:'基础信息',icon:'box',fields:[['商品名称','轻量缓震运动鞋'],['商品编码','SH01'],['品牌','KELIN·客邻'],['品类','鞋靴'],['商品描述','轻量缓震跑步鞋'],['商品状态','正常在售']]},
+        {title:'规格信息',icon:'layers',fields:[['鞋码范围','35-44'],['鞋楦','标准楦'],['适用性别','男女同款'],['商品颜色','云雾白 / 炭黑']]},
+        {title:'材质信息',icon:'layers',fields:[['鞋面材质','透气网布'],['鞋底材质','EVA 回弹中底'],['鞋垫','透气抗菌鞋垫'],['大底','耐磨橡胶']]},
+        {title:'商业信息',icon:'target',fields:[['商品卖点','轻量缓震、透气网面'],['适用场景','慢跑 / 健身'],['目标人群','18-40 岁运动人群'],['商品定位','入门跑步鞋']]}
+      ],
+      skus:[
+        {code:'SH01-01',color:'云雾白',size:'40',status:'confirmed'},
+        {code:'SH01-02',color:'炭黑',size:'41',status:'confirmed'},
+        {code:'SH01-03',color:'云雾白',size:'42',status:'confirmed'}
+      ],
+      sources:[
+        {id:'src-sh01-1',name:'SH01-规格表.xlsx',type:'excel',size:'38 KB',status:'parsed',angle:'正面',time:'2026-11-19T09:00:00'},
+        {id:'src-sh01-2',name:'SH01-鞋面细节.png',type:'image',size:'1.6 MB',status:'ok',angle:'细节',time:'2026-11-19T09:00:00'}
+      ],
+      versions:[
+        {v:1,time:'2026-11-19T09:00:00',by:'系统导入',note:'初始商品档案',status:'已发布',changes:[{f:'全部字段',before:'—',after:'已确认',reason:'初始提取'}]}
+      ]
+    },
+    {
+      id:'SK01',name:'氨基酸洁面乳',code:'SK01',category:'美妆个护',brand:'KELIN·客邻',status:'draft',statusNote:'草稿',currentVersion:1,
+      color:'#b5792f',icon:'jar',desc:'氨基酸温和洁面，绵密泡沫，清洁不紧绷，适合敏感肌。',
+      groups:[
+        {title:'基础信息',icon:'box',fields:[['商品名称','氨基酸洁面乳'],['商品编码','SK01'],['品牌','KELIN·客邻'],['品类','美妆个护'],['商品描述','氨基酸温和洁面'],['商品状态','待完善']]},
+        {title:'规格信息',icon:'layers',fields:[['商品容量','120 ml'],['包装规格','软管装'],['保质期','36 个月']]},
+        {title:'成分信息',icon:'layers',fields:[['核心成分','氨基酸表活、甘油'],['香精','无'],['防腐体系','温和防腐'],['pH 值','5.5-6.5']]},
+        {title:'商业信息',icon:'target',fields:[['商品卖点','温和清洁、敏感肌可用'],['适用场景','日常清洁'],['目标人群','敏感肌人群'],['适用肤质','全肤质 / 敏感肌']]}
+      ],
+      skus:[
+        {code:'SK01-01',color:'—',size:'120ml',status:'draft'}
+      ],
+      sources:[
+        {id:'src-sk01-1',name:'SK01-成分表.pdf',type:'pdf',size:'320 KB',status:'parsed',angle:'正面',time:'2026-11-21T11:00:00'}
+      ],
+      versions:[
+        {v:1,time:'2026-11-21T11:00:00',by:'系统导入',note:'草稿（缺成分比例与备案信息）',status:'草稿',changes:[{f:'部分字段',before:'—',after:'候选值',reason:'初始提取'}]}
+      ]
+    }
+  ];
+
+  const imports=[
+    {id:'IMP-1012',name:'BP01 六视角素材导入',productId:'BP01',files:6,time:'2026-11-25T16:20:00',status:'cleaning',progress:68,steps:['解析','提取','清洗','审核','完成']},
+    {id:'IMP-1009',name:'CL01 商品资料导入',productId:'CL01',files:2,time:'2026-11-22T10:05:00',status:'awaiting',progress:100,steps:['解析','提取','清洗','审核','完成']},
+    {id:'IMP-1006',name:'SH01 规格表导入',productId:'SH01',files:2,time:'2026-11-19T09:05:00',status:'done',progress:100,steps:['解析','提取','清洗','审核','完成']},
+    {id:'IMP-1002',name:'SK01 成分表导入',productId:'SK01',files:1,time:'2026-11-21T11:02:00',status:'done',progress:100,steps:['解析','提取','清洗','审核','完成']}
+  ];
+
+  const issues=[
+    {id:'QI-201',productId:'BP01',field:'商品尺寸',type:'conflict',sev:'high',status:'pending',desc:'规格表 28×24×12 cm 与供应商新资料 28×24×14 cm 冲突',
+      sources:[{name:'BP01-规格表.xlsx',loc:'Sheet1 · A5',value:'28×24×12 cm'},{name:'BP01-供应商更新.docx',loc:'第2页 · 规格',value:'28×24×14 cm'}],
+      aiJudge:'两处来源对「高度」字段存在差异，判定为数据冲突，建议以已核验规格表为准，或人工核实供应商更新。',suggestion:'28×24×12 cm'},
+    {id:'QI-202',productId:'BP01',field:'内里材质',type:'missing',sev:'medium',status:'pending',desc:'商品档案缺少内里材质来源依据',sources:[],suggestion:'涤纶（待补充来源）'},
+    {id:'QI-203',productId:'CL01',field:'商品重量',type:'unclear',sev:'medium',status:'pending',desc:'重量字段无来源文件支撑，来源不明确',sources:[],suggestion:'待关联来源'},
+    {id:'QI-204',productId:'CL01',field:'面料成分',type:'format',sev:'low',status:'pending',desc:'面料成分表达格式不统一（100% 粘纤 vs 粘胶纤维）',sources:[],suggestion:'100% 粘胶纤维'},
+    {id:'QI-205',productId:'SK01',field:'适用肤质',type:'missing',sev:'medium',status:'pending',desc:'缺少适用肤质字段',sources:[],suggestion:'全肤质 / 敏感肌'}
+  ];
+
+  const plans=[
+    {
+      id:'PL-2026-001',name:'BP01 春节年货节 · 抖音种草',productId:'BP01',productVersion:2,scene:'节日活动',channel:'抖音',contentType:'短视频',status:'review',stage:'待人工审核',
+      people:'25-40 岁都市女性',goal:'促进用户种草',style:'温暖治愈',updatedAt:'2026-11-25T18:40:00',
+      insights:[
+        {point:'羊毛混纺材质',basis:'商品档案 · 主体材质',type:'fact'},
+        {point:'暖米白配色',basis:'商品档案 + 正面参考图',type:'fact'},
+        {point:'适合通勤搭配',basis:'商品场景分析',type:'derived'},
+        {point:'轻量出行',basis:'商品重量 650g 推导',type:'derived'}
+      ],
+      strategy:{
+        goal:'结合春节氛围与日常通勤场景，突出外观、材质与实用容量，实现小红书/抖音种草。',
+        audience:'都市女性关注「通勤实用 + 节日氛围 + 轻奢质感」',
+        position:'轻奢通勤双肩包，节日里也从容通勤',
+        core:['羊毛混纺材质','暖米白高级配色','18L 大容量'],
+        direction:'节日温暖氛围 + 真实通勤场景 + 材质细节放大',
+        channel:'抖音竖版短视频，前 3 秒用材质特写抓注意力',
+        structure:'钩子(材质) → 场景(通勤) → 细节(容量/结构) → 种草收尾'
+      },
+      concepts:[
+        {id:'c1',name:'「通勤里的小温暖」',position:'节日通勤场景',core:'用春节前的城市通勤切入，强调冬日里羊毛材质的温暖与高级质感',style:'温暖治愈',mood:'冬日暖阳、通勤街景',focus:'材质与配色',aud:'都市通勤女性',reason:'贴合节日氛围，情感共鸣强',selected:true},
+        {id:'c2',name:'「装下一年好心情」',position:'容量实用主义',core:'以 18L 大容量与分区收纳为核心，讲「装得下」的实用价值',style:'自然生活',mood:'明亮室内、收纳展示',focus:'容量与结构',aud:'注重实用的通勤女性',reason:'卖点清晰，利于转化'},
+        {id:'c3',name:'「轻奢质感大片」',position:'品牌质感表达',core:'以高级静物布光呈现羊毛混纺质感，强化轻奢定位',style:'高级极简',mood:'影棚静物、低饱和',focus:'材质质感与品牌调性',aud:'注重品质的轻奢人群',reason:'提升品牌形象与溢价'}
+      ],
+      images:[
+        {id:'img1',no:1,use:'商品主视觉',theme:'暖米白双肩包静物主图',focus:'整体包型与配色',comp:'居中构图、45° 展示',scene:'暖色纯色背景',light:'柔光主光 + 轮廓光',color:'低饱和暖调',ratio:'3:4',copy:'温暖通勤，从容出发',gen:'女士暖米白双肩包，羊毛混纺质感，暖色背景，高级静物，柔光'},
+        {id:'img2',no:2,use:'材质细节',theme:'羊毛混纺材质特写',focus:'主体材质纹理',comp:'微距特写',scene:'自然光下的织物',light:'侧逆光凸显纹理',color:'暖米白调',ratio:'1:1',copy:'70% 羊毛混纺，柔软亲肤',gen:'羊毛混纺面料微距特写，纹理清晰，暖色调，柔光'},
+        {id:'img3',no:3,use:'使用场景',theme:'通勤街景上身图',focus:'通勤场景与上身效果',comp:'中景、人物肩部以上',scene:'城市街道冬日氛围',light:'自然光',color:'暖冬色调',ratio:'3:4',copy:'通勤路上，从容优雅',gen:'都市女性通勤场景，背暖米白双肩包，冬日暖阳，自然光'},
+        {id:'img4',no:4,use:'卖点展示',theme:'容量与分区展示',focus:'18L 容量与收纳',comp:'俯拍 + 分区特写',scene:'明亮室内桌面',light:'均匀顶光',color:'明亮干净',ratio:'4:3',copy:'18L 大容量，分区收纳',gen:'双肩包内部收纳分区展示，俯拍，明亮，物品整齐摆放'},
+        {id:'img5',no:5,use:'规格说明',theme:'尺寸规格标注图',focus:'尺寸与规格',comp:'正侧双视角 + 标注',scene:'纯色背景',light:'均匀布光',color:'中性浅灰',ratio:'1:1',copy:'28×24×12cm · 650g',gen:'双肩包尺寸标注图，正侧视角，浅灰背景，规格标注清晰'}
+      ],
+      shots:[
+        {id:'s1',no:1,dur:2,scene:'材质特写',scale:'特写',move:'固定',focus:'羊毛混纺材质',vo:'春节临近，一件柔软又高级的通勤好物。',sub:'温暖开场',trans:'叠化',color:'#5a5fd6'},
+        {id:'s2',no:2,dur:3,scene:'通勤街景上身',scale:'中景',move:'跟拍',focus:'上身效果与配色',vo:'暖米白配色，日常通勤也能从容优雅。',sub:'通勤场景',trans:'切',color:'#8a6fd1'},
+        {id:'s3',no:3,dur:3,scene:'容量与分区展示',scale:'近景',move:'推',focus:'18L 容量',vo:'18L 大容量，装下通勤所需的一切。',sub:'容量卖点',trans:'切',color:'#4f8fd1'},
+        {id:'s4',no:4,dur:2,scene:'细节放大',scale:'特写',move:'固定',focus:'五金与做工',vo:'细节做工，经得起细看。',sub:'细节呈现',trans:'叠化',color:'#b5792f'},
+        {id:'s5',no:5,dur:2,scene:'品牌收尾',scale:'中景',move:'拉',focus:'整体品牌形象',vo:'ProductFlow 客邻尚品，温暖你的每一次出发。',sub:'品牌收尾',trans:'淡出',color:'#5a5fd6'}
+      ],
+      versions:[
+        {v:1,time:'2026-11-25T18:40:00',by:'AI 生成',productVersion:2,note:'初始策划',changes:'首次生成全部内容',status:'待审核'}
+      ]
+    },
+    {
+      id:'PL-2026-002',name:'BP01 日常种草 · 小红书图文',productId:'BP01',productVersion:2,scene:'日常种草',channel:'小红书',contentType:'图文',status:'draft',stage:'草稿',
+      people:'25-40 岁都市女性',goal:'突出商品卖点',style:'自然生活',updatedAt:'2026-11-25T12:00:00',
+      insights:[],strategy:null,concepts:[],images:[],shots:[],versions:[]
+    }
+  ];
+
+  return {products,imports,issues,plans};
+}
+
+/* ================= 持久化 ================= */
+let DB;
+function loadDB(){try{const raw=localStorage.getItem(LS_KEY);if(raw){DB=JSON.parse(raw);return;}}catch(e){}DB=seedData();saveDB();}
+function saveDB(){try{localStorage.setItem(LS_KEY,JSON.stringify(DB));}catch(e){}}
+function resetData(){if(confirm('确认恢复演示数据？当前所有本地修改将被重置为初始示例。')){DB=seedData();saveDB();toast('已恢复演示数据','success');render();}}
+loadDB();
+
+/* ================= 路由 & 状态 ================= */
+let state={page:'data',productId:null,planId:null,sub:'overview'};
+function navigate(hash){location.hash=hash;}
+function parseRoute(){
+  const h=(location.hash||'#/data/overview').replace(/^#\/?/,'');
+  const parts=h.split('/').filter(Boolean);
+  state={center:parts[0]||'data',sub:null,productId:null,planId:null};
+  if(state.center==='data'){
+    const known=['overview','product','imports','cleaning','quality','versions'];
+    state.sub=known.includes(parts[1])?parts[1]:'overview';
+    state.productId=parts[2]||null;
+  }else{
+    if(parts[1]==='list'){state.sub='list';}
+    else if(parts[1]==='new'){state.sub='new';}
+    else if(parts[1]){state.planId=parts[1];state.sub=parts[2]||'insight';}
+    else {state.sub='list';}
+  }
+}
+function go(h){navigate('#/'+h);}
+
+/* ================= 通用渲染辅助 ================= */
+const STATUS_TAG={confirmed:'green',pending:'orange',draft:'gray',exception:'red'};
+function statusTag(s,label){
+  const map={confirmed:['green','已确认'],pending:['orange','待审核'],draft:['gray','草稿'],exception:['red','异常'],
+    done:['green','已完成'],cleaning:['blue','清洗中'],parsing:['blue','解析中'],awaiting:['orange','待审核'],failed:['red','失败'],
+    review:['orange','待审核'],confirmed:['green','已确认'],archived:['gray','已归档'],running:['blue','进行中']};
+  const m=map[s]||['gray',s];
+  return '<span class="tag '+m[0]+' dot">'+esc(label||m[1])+'</span>';
+}
+function productById(id){return DB.products.find(p=>p.id===id);}
+function planById(id){return DB.plans.find(p=>p.id===id);}
+function productThumb(p,size){
+  size=size||42;
+  return '<span class="thumb" style="width:'+size+'px;height:'+size+'px;background:linear-gradient(135deg,'+p.color+','+shade(p.color)+')">'+ic(p.icon,Math.round(size*0.52))+'</span>';
+}
+function shade(hex){const n=parseInt(hex.slice(1),16);const r=Math.min(255,(n>>16)+26),g=Math.min(255,((n>>8)&255)+26),b=Math.min(255,(n&255)+26);return '#'+((r<<16)|(g<<8)|b).toString(16).padStart(6,'0');}
+function statsCount(fn){return DB.products.filter(fn).length;}
+
+/* ================= 导航 ================= */
+const NAV=[
+  {center:'data',title:'商品数据中心',icon:'box',children:[
+    {sub:'overview',label:'商品总览',icon:'grid'},
+    {sub:'product',label:'商品档案',icon:'box'},
+    {sub:'imports',label:'资料导入',icon:'upload'},
+    {sub:'cleaning',label:'AI 数据清洗',icon:'sparkle'},
+    {sub:'quality',label:'数据质量审核',icon:'alert'},
+    {sub:'versions',label:'版本管理',icon:'archive'}
+  ]},
+  {center:'plans',title:'AI 内容策划中心',icon:'sparkle',children:[
+    {sub:'list',label:'策划任务列表',icon:'list'},
+    {sub:'new',label:'创建策划任务',icon:'plus'},
+    {sub:'insight',label:'商品理解与卖点',icon:'eye'},
+    {sub:'strategy',label:'营销策略与创意',icon:'target'},
+    {sub:'image',label:'图片策划',icon:'image'},
+    {sub:'video',label:'视频脚本与分镜',icon:'video'},
+    {sub:'review',label:'策划审核与版本',icon:'checkCircle'}
+  ]}
+];
+function navRoute(center,sub){
+  if(center==='data'){
+    if(sub==='product'){return 'data/product/'+(state.productId||(DB.products[0]&&DB.products[0].id)||'BP01');}
+    return 'data/'+sub;
+  }
+  if(sub==='list')return 'plans/list';
+  if(sub==='new')return 'plans/new';
+  // 详情页需要 planId
+  const pid=state.planId||(DB.plans[0]&&DB.plans[0].id);
+  return pid?('plans/'+pid+'/'+sub):'plans/list';
+}
+function renderNav(){
+  const el=document.getElementById('navScroll');
+  el.innerHTML=NAV.map(g=>{
+    const cap='<div class="cap">'+ic(g.icon,15)+'<span>'+esc(g.title)+'</span></div>';
+    const items=g.children.map(c=>{
+      let on=false;
+      if(g.center==='data'){on=state.center==='data'&&state.sub===c.sub;}
+      else {
+        if(c.sub==='list')on=state.center==='plans'&&state.sub==='list';
+        else if(c.sub==='new')on=state.center==='plans'&&state.sub==='new';
+        else on=state.center==='plans'&&state.sub===c.sub&&!!state.planId;
+      }
+      let badge='';
+      if(g.center==='data'&&c.sub==='quality'){const n=DB.issues.filter(i=>i.status==='pending').length;if(n)badge='<span class="pin">'+n+'</span>';}
+      if(g.center==='plans'&&c.sub==='list'){const n=DB.plans.filter(p=>p.status==='review').length;if(n)badge='<span class="pin">'+n+'</span>';}
+      return '<button class="nav-item'+(on?' on':'')+'" onclick="go(\''+navRoute(g.center,c.sub)+'\')">'+ic(c.icon,17)+'<span>'+esc(c.label)+'</span>'+badge+'</button>';
+    }).join('');
+    return '<div class="nav-group">'+cap+items+'</div>';
+  }).join('');
+}
+function toggleSide(){document.getElementById('side').classList.toggle('open');}
+
+/* ================= 主渲染入口 ================= */
+function render(){
+  closeModal();
+  parseRoute();
+  renderNav();
+  const crumb=document.getElementById('crumb');
+  let html='',crumbHtml='';
+  if(state.center==='data'){
+    crumbHtml='<span>商品数据中心</span>';
+    if(state.sub==='overview'){html=pageDataOverview();crumbHtml='<span>商品数据中心</span><span class="sep">/</span><b>商品总览</b>';}
+    else if(state.sub==='product'){html=pageProductDetail();const p=productById(state.productId);crumbHtml='<span>商品数据中心</span><span class="sep">/</span><span>商品档案</span><span class="sep">/</span><b>'+(p?esc(p.name):'')+'</b>';}
+    else if(state.sub==='imports'){html=pageImports();crumbHtml='<span>商品数据中心</span><span class="sep">/</span><b>资料导入</b>';}
+    else if(state.sub==='cleaning'){html=pageCleaning();crumbHtml='<span>商品数据中心</span><span class="sep">/</span><b>AI 数据清洗</b>';}
+    else if(state.sub==='quality'){html=pageQuality();crumbHtml='<span>商品数据中心</span><span class="sep">/</span><b>数据质量审核</b>';}
+    else if(state.sub==='versions'){html=pageVersions();crumbHtml='<span>商品数据中心</span><span class="sep">/</span><b>版本管理</b>';}
+    else {html=pageDataOverview();crumbHtml='<span>商品数据中心</span><span class="sep">/</span><b>商品总览</b>';}
+  }else{
+    if(state.sub==='list'){html=pagePlanList();crumbHtml='<span>AI 内容策划中心</span><span class="sep">/</span><b>策划任务列表</b>';}
+    else if(state.sub==='new'){html=pagePlanNew();crumbHtml='<span>AI 内容策划中心</span><span class="sep">/</span><b>创建策划任务</b>';}
+    else if(state.sub==='insight'){html=pagePlanInsight();crumbHtml='<span>AI 内容策划中心</span><span class="sep">/</span><b>商品理解与卖点</b>';}
+    else if(state.sub==='strategy'){html=pagePlanStrategy();crumbHtml='<span>AI 内容策划中心</span><span class="sep">/</span><b>营销策略与创意</b>';}
+    else if(state.sub==='image'){html=pagePlanImage();crumbHtml='<span>AI 内容策划中心</span><span class="sep">/</span><b>图片策划</b>';}
+    else if(state.sub==='video'){html=pagePlanVideo();crumbHtml='<span>AI 内容策划中心</span><span class="sep">/</span><b>视频脚本与分镜</b>';}
+    else if(state.sub==='review'){html=pagePlanReview();crumbHtml='<span>AI 内容策划中心</span><span class="sep">/</span><b>策划审核与版本</b>';}
+    else {html=pagePlanList();crumbHtml='<span>AI 内容策划中心</span><span class="sep">/</span><b>策划任务列表</b>';}
+  }
+  crumb.innerHTML=crumbHtml;
+  document.getElementById('view').innerHTML=html;
+  document.getElementById('main').scrollTop=0;
+}
+
+/* ================= 全局搜索 ================= */
+function globalSearch(q){
+  if(!q)return;
+  q=q.trim().toLowerCase();
+  const prod=DB.products.find(p=>p.name.toLowerCase().includes(q)||p.code.toLowerCase().includes(q));
+  const plan=DB.plans.find(p=>p.name.toLowerCase().includes(q));
+  if(prod){go('data/product/'+prod.id);}
+  else if(plan){go('plans/'+plan.id+'/insight');}
+  else toast('未找到匹配的「'+q+'」','info');
+}
+
+/* ================= 商品数据中心：页面 ================= */
+let curDetailTab='info';
+let overviewFilter={q:'',cat:'',status:''};
+
+/* 状态与任务状态文案 */
+const PROD_STATUS={confirmed:'已确认',pending:'待审核',draft:'草稿',exception:'异常'};
+const IMPORT_STATUS={parsing:'正在解析',extracting:'正在提取',cleaning:'正在清洗',awaiting:'等待审核',done:'已完成',failed:'处理失败',queued:'等待处理'};
+
+function pageDataOverview(){
+  const products=DB.products.filter(p=>{
+    if(overviewFilter.q && !(p.name+p.code+p.category).toLowerCase().includes(overviewFilter.q.toLowerCase()))return false;
+    if(overviewFilter.cat && p.category!==overviewFilter.cat)return false;
+    if(overviewFilter.status && p.status!==overviewFilter.status)return false;
+    return true;
+  });
+  const cats=[...new Set(DB.products.map(p=>p.category))];
+  const skuTotal=DB.products.reduce((s,p)=>s+p.skus.length,0);
+  const confirmed=statsCount(p=>p.status==='confirmed');
+  const pending=statsCount(p=>p.status==='pending');
+  const issueCount=DB.issues.filter(i=>i.status==='pending').length;
+  const runningImports=DB.imports.filter(t=>['parsing','extracting','cleaning','queued'].includes(t.status)).length;
+
+  return `
+  <div class="page-head">
+    <div class="row">
+      <div><div class="h1">商品数据中心</div><div class="desc">统一管理商品资料、标准化商品信息并维护可信商品档案。商品档案是 AI 内容策划的可信数据基础。</div></div>
+      <div class="actions">
+        <button class="btn btn-secondary" onclick="newProduct()">${ic('plus')}新增商品</button>
+        <button class="btn btn-primary" onclick="importWizardOpen()">${ic('upload')}导入商品资料</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat clickable" onclick="go('data/overview')"><div class="lbl">${ic('box')}商品总数</div><div class="num">${DB.products.length}</div><div class="sub">覆盖 ${cats.length} 个品类</div></div>
+    <div class="stat"><div class="lbl">${ic('layers')}SKU 总数</div><div class="num">${skuTotal}</div><div class="sub">关联规格变体</div></div>
+    <div class="stat clickable" onclick="go('data/overview')"><div class="lbl">${ic('checkCircle')}已确认商品</div><div class="num" style="color:var(--success)">${confirmed}</div><div class="sub">可信档案</div></div>
+    <div class="stat clickable" onclick="go('data/quality')"><div class="lbl">${ic('clock')}待审核商品</div><div class="num" style="color:var(--warning)">${pending}</div><div class="sub">待人工确认</div></div>
+    <div class="stat clickable" onclick="go('data/quality')"><div class="lbl">${ic('alert')}数据问题</div><div class="num" style="color:var(--danger)">${issueCount}</div><div class="sub">待处理冲突/缺失</div></div>
+    <div class="stat clickable" onclick="go('data/imports')"><div class="lbl">${ic('workflow')}进行中导入</div><div class="num" style="color:var(--info)">${runningImports}</div><div class="sub">正在解析/清洗</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-h"><h3>商品列表</h3><span class="sub">${products.length} 个商品</span>
+      <div class="actions"><button class="btn btn-ghost btn-sm" onclick="newProduct()">${ic('plus')}新增商品</button></div>
+    </div>
+    <div class="card-b" style="padding-top:0">
+      <div class="filters" style="margin-top:16px">
+        <div class="searchbox" style="width:260px">${ic('search')}<input placeholder="搜索商品名称 / 编码" value="${esc(overviewFilter.q)}" oninput="overviewFilter.q=this.value;render()"></div>
+        <select class="input" onchange="overviewFilter.cat=this.value;render()">
+          <option value="">全部品类</option>
+          ${cats.map(c=>'<option '+(overviewFilter.cat===c?'selected':'')+'>'+esc(c)+'</option>').join('')}
+        </select>
+        <select class="input" onchange="overviewFilter.status=this.value;render()">
+          <option value="">全部状态</option>
+          ${Object.entries(PROD_STATUS).map(([k,v])=>'<option value="'+k+'" '+(overviewFilter.status===k?'selected':'')+'>'+v+'</option>').join('')}
+        </select>
+        <span class="spacer"></span>
+        <span class="small muted">共 ${products.length} 条 · 模拟数据</span>
+      </div>
+      <table class="tbl">
+        <thead><tr><th>商品</th><th>编码</th><th>品类</th><th>SKU</th><th>状态</th><th>更新时间</th><th style="text-align:right">操作</th></tr></thead>
+        <tbody>
+        ${products.length?products.map(p=>{
+          const upd=p.versions.length?p.versions[p.versions.length-1].time:'—';
+          return `<tr class="clickable" onclick="go('data/product/${p.id}')">
+            <td><div class="cell-prod">${productThumb(p)}<div><div class="nm">${esc(p.name)}</div><div class="cd">V${p.currentVersion}</div></div></div></td>
+            <td class="num">${esc(p.code)}</td>
+            <td>${esc(p.category)}</td>
+            <td class="num">${p.skus.length}</td>
+            <td>${statusTag(p.status,PROD_STATUS[p.status])}</td>
+            <td class="muted small">${fmtTime(upd)}</td>
+            <td><div class="act" style="justify-content:flex-end" onclick="event.stopPropagation()">
+              <button class="btn btn-soft btn-xs" onclick="go('data/product/${p.id}')">查看</button>
+              <button class="btn btn-ghost btn-xs" onclick="go('data/quality')">审核</button>
+            </div></td>
+          </tr>`;}).join(''):'<tr><td colspan="7"><div class="empty"><div class="art">'+ic('box',30)+'</div><h4>暂无匹配商品</h4><p>调整筛选条件，或导入新的商品资料。</p><div class="actions"><button class="btn btn-primary btn-sm" onclick="importWizardOpen()">'+ic('upload')+'导入商品资料</button></div></div></td></tr>'}
+        </tbody>
+      </table>
+      <div class="pager"><span>共 ${products.length} 条</span></div>
+    </div>
+  </div>
+
+  <div class="grid-2 mt">
+    <div class="card">
+      <div class="card-h"><h3>待处理任务</h3><span class="sub">需要关注的数据治理事项</span></div>
+      <div class="card-b">
+        ${pendingTasksList()}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>数据链路</h3><span class="sub">商品档案 → AI 内容策划</span></div>
+      <div class="card-b">
+        <div class="chain" style="flex-direction:column;align-items:stretch">
+          <div class="node">${ic('upload')}<div><b>资料导入</b><div class="small muted">原始资料 → 系统</div></div></div>
+          <div class="arr" style="text-align:center">↓</div>
+          <div class="node">${ic('sparkle')}<div><b>AI 数据清洗</b><div class="small muted">提取 / 标准化 / 质量检查</div></div></div>
+          <div class="arr" style="text-align:center">↓</div>
+          <div class="node">${ic('checkCircle')}<div><b>商品档案发布</b><div class="small muted">不可变版本 · 可信数据</div></div></div>
+          <div class="arr" style="text-align:center">↓</div>
+          <div class="node">${ic('target')}<div><b>AI 内容策划</b><div class="small muted">引用已确认版本</div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function pendingTasksList(){
+  const items=[];
+  const conflicts=DB.issues.filter(i=>i.status==='pending'&&i.type==='conflict').length;
+  const missing=DB.issues.filter(i=>i.status==='pending'&&i.type==='missing').length;
+  const unclear=DB.issues.filter(i=>i.status==='pending'&&i.type==='unclear').length;
+  const running=DB.imports.filter(t=>['parsing','extracting','cleaning','queued'].includes(t.status)).length;
+  const rows=[
+    {t:'待处理数据冲突',n:conflicts,on:"go('data/quality')",icon:'alert',color:'var(--danger)'},
+    {t:'待补充商品属性',n:missing,on:"go('data/quality')",icon:'edit',color:'var(--warning)'},
+    {t:'待审核商品档案',n:statsCount(p=>p.status==='pending'),on:"go('data/quality')",icon:'clock',color:'var(--warning)'},
+    {t:'正在进行的资料解析',n:running,on:"go('data/imports')",icon:'workflow',color:'var(--info)'}
+  ];
+  if(rows.every(r=>r.n===0))return '<div class="small muted">当前没有待处理任务。</div>';
+  return rows.filter(r=>r.n>0).map(r=>`<div class="file" style="cursor:pointer" onclick="${r.on}"><span class="fic" style="color:${r.color}">${ic(r.icon)}</span><div class="meta"><b>${r.t}</b></div><span class="tag ${r.n>0&&r.t.includes('冲突')?'red':''}" style="background:${r.color==='var(--danger)'?'var(--danger-weak)':'var(--surface-2)'};color:${r.color}">${r.n}</span></div>`).join('');
+}
+
+/* ================= 新增商品 ================= */
+function newProduct(){
+  openModal(`
+    <div class="modal-h"><h3>新增商品</h3><button class="icon-btn" onclick="closeModal()">${ic('close')}</button></div>
+    <div class="modal-b">
+      <div class="field"><label>商品名称 <span class="req">*</span></label><input class="input" id="npName" placeholder="例如：通勤托特包"></div>
+      <div class="row">
+        <div class="field"><label>商品编码 <span class="req">*</span></label><input class="input" id="npCode" placeholder="例如：BP02"></div>
+        <div class="field"><label>品类</label><select class="input" id="npCat"><option>箱包</option><option>服饰</option><option>鞋靴</option><option>美妆个护</option></select></div>
+      </div>
+      <div class="field"><label>品牌</label><input class="input" id="npBrand" value="KELIN·客邻"></div>
+      <div class="field"><label>商品描述</label><textarea class="input" id="npDesc" placeholder="简要描述商品"></textarea></div>
+    </div>
+    <div class="modal-f"><button class="btn btn-secondary" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="saveNewProduct()">创建草稿</button></div>
+  `);
+}
+function saveNewProduct(){
+  const name=document.getElementById('npName').value.trim();
+  const code=document.getElementById('npCode').value.trim();
+  if(!name||!code){toast('请填写商品名称与编码','error');return;}
+  if(DB.products.some(p=>p.code===code)){toast('商品编码 '+code+' 已存在','error');return;}
+  const cat=document.getElementById('npCat').value;
+  const colors={箱包:'#5a5fd6',服饰:'#d96a8b',鞋靴:'#2f7d6d',美妆个护:'#b5792f'};
+  const icons={箱包:'bag',服饰:'shirt',鞋靴:'shoe',美妆个护:'jar'};
+  DB.products.push({
+    id:code,name,code,category:cat,brand:document.getElementById('npBrand').value||'KELIN·客邻',status:'draft',statusNote:'草稿',currentVersion:1,
+    color:colors[cat]||'#5a5fd6',icon:icons[cat]||'box',desc:document.getElementById('npDesc').value||'待补充',
+    groups:[{title:'基础信息',icon:'box',fields:[['商品名称',name],['商品编码',code],['品类',cat],['商品描述',document.getElementById('npDesc').value||'待补充'],['商品状态','待完善']]}],
+    skus:[],sources:[],versions:[{v:1,time:now(),by:'林运营',note:'手动创建草稿',status:'草稿',changes:[{f:'商品创建',before:'—',after:name,reason:'手动新增'}]}]
+  });
+  saveDB();closeModal();toast('已创建草稿商品 '+code,'success');go('data/product/'+code);
+}
+
+/* ================= 商品档案详情 ================= */
+function pageProductDetail(){
+  const p=productById(state.productId);
+  if(!p)return emptyState('未找到商品','商品不存在或已被移除。',"go('data/overview')",'返回商品总览');
+  const upd=p.versions.length?p.versions[p.versions.length-1].time:'—';
+  const tabs=[['info','基本信息'],['sku','SKU 管理'],['source','数据来源'],['version','版本历史']];
+  return `
+  <div class="page-head">
+    <div class="row">
+      <div style="display:flex;gap:12px;align-items:center">
+        <button class="icon-btn" onclick="go('data/overview')">${ic('arrowLeft')}</button>
+        <div><div class="h1">商品档案</div><div class="desc">查看商品完整结构化信息、关联 SKU、资料来源与版本历史。</div></div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-secondary" onclick="editProduct('${p.id}')">${ic('edit')}编辑档案</button>
+        <button class="btn btn-secondary" onclick="curDetailTab='version';render()">${ic('clock')}历史版本</button>
+        <button class="btn btn-primary" onclick="publishVersion('${p.id}')">${ic('check')}确认发布</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pd-hero">
+    <span class="img" style="background:linear-gradient(135deg,${p.color},${shade(p.color)})">${ic(p.icon,54)}</span>
+    <div class="info">
+      <h2>${esc(p.name)}</h2>
+      <div class="meta">
+        <span>${ic('box')}编码 ${esc(p.code)}</span>
+        <span>${ic('layers')}${esc(p.category)}</span>
+        <span>${ic('flag')}${esc(p.brand)}</span>
+        <span>${ic('clock')}更新于 ${fmtTime(upd)}</span>
+      </div>
+      <div class="tags"><span class="tag purple">当前版本 V${p.currentVersion}</span>${statusTag(p.status,PROD_STATUS[p.status])}</div>
+    </div>
+    <div class="side"><button class="btn btn-ghost btn-sm" onclick="toast('仅演示：无真实导出','info')">${ic('download')}导出</button></div>
+  </div>
+
+  <div class="tabs mt">${tabs.map(t=>'<button class="tab '+(curDetailTab===t[0]?'on':'')+'" onclick="curDetailTab=\''+t[0]+'\';render()">'+t[1]+'</button>').join('')}</div>
+  <div id="detailTabBody">${renderDetailTab(p)}</div>`;
+}
+
+function renderDetailTab(p){
+  if(curDetailTab==='sku')return renderSkuTab(p);
+  if(curDetailTab==='source')return renderSourceTab(p);
+  if(curDetailTab==='version')return renderVersionTab(p);
+  return renderInfoTab(p);
+}
+function renderInfoTab(p){
+  return `<div class="attr-grid">${p.groups.map(g=>`
+    <div class="attr-group"><h4>${ic(g.icon)}${esc(g.title)}</h4>
+      ${g.fields.map(f=>`<div class="av"><span class="k">${esc(f[0])}</span><div style="text-align:right"><div class="val">${esc(f[1])}</div><div class="src" onclick="sourceModal('${p.id}','${esc(f[0])}')">查看来源</div></div></div>`).join('')}
+    </div>`).join('')}</div>`;
+}
+function renderSkuTab(p){
+  return `<div class="card">
+    <div class="card-h"><h3>SKU 列表</h3><span class="sub">${p.skus.length} 个规格变体</span><div class="actions"><button class="btn btn-soft btn-sm" onclick="addSku('${p.id}')">${ic('plus')}新增 SKU</button></div></div>
+    <div class="card-b" style="padding-top:0">
+      <table class="tbl">
+        <thead><tr><th>SKU 编码</th><th>颜色</th><th>尺寸</th><th>状态</th><th style="text-align:right">操作</th></tr></thead>
+        <tbody>
+        ${p.skus.length?p.skus.map(s=>`<tr><td class="num bold">${esc(s.code)}</td><td>${esc(s.color)}</td><td>${esc(s.size)}</td><td>${statusTag(s.status,s.status==='confirmed'?'已确认':s.status==='pending'?'待审核':'草稿')}</td>
+          <td><div class="act" style="justify-content:flex-end"><button class="btn btn-ghost btn-xs" onclick="editSku('${p.id}','${esc(s.code)}')">${ic('edit')}编辑</button></div></td></tr>`).join(''):'<tr><td colspan="5"><div class="empty"><div class="art">'+ic('layers',30)+'</div><h4>暂无 SKU</h4><p>为该商品添加规格变体。</p><div class="actions"><button class="btn btn-primary btn-sm" onclick="addSku(\''+p.id+'\')">新增 SKU</button></div></div></td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+function renderSourceTab(p){
+  return `<div class="card">
+    <div class="card-h"><h3>资料来源</h3><span class="sub">${p.sources.length} 份原始文件</span><div class="actions"><button class="btn btn-soft btn-sm" onclick="importWizardOpen('${p.id}')">${ic('upload')}补充资料</button></div></div>
+    <div class="card-b">${p.sources.length?`<div class="filelist">${p.sources.map(s=>`<div class="file"><span class="fic">${fileIcon(s.type)}</span><div class="meta"><b>${esc(s.name)}</b><span>${esc(s.type.toUpperCase())} · ${esc(s.size)} · 视角 ${esc(s.angle)}</span></div>${sourceStatusTag(s.status)}<button class="btn btn-ghost btn-xs" onclick="sourceModal('${p.id}','${esc(s.name)}')">${ic('eye')}</button></div>`).join('')}</div>`:'<div class="empty"><div class="art">'+ic('doc',30)+'</div><h4>暂无原始资料</h4><p>上传商品规格表、详情页、图片等原始资料。</p><div class="actions"><button class="btn btn-primary btn-sm" onclick="importWizardOpen(\''+p.id+'\')">导入资料</button></div></div>'}</div>
+  </div>`;
+}
+function renderVersionTab(p){
+  return `<div class="card">
+    <div class="card-h"><h3>版本历史</h3><span class="sub">不可变版本 · 每次发布生成新版本</span></div>
+    <div class="card-b" style="padding-top:0">${p.versions.slice().reverse().map((v,i)=>`
+      <div class="file" style="margin-top:12px">
+        <span class="fic">${ic('archive')}</span>
+        <div class="meta"><b>V${v.v} · ${esc(v.note)}</b><span>${fmtTime(v.time)} · ${esc(v.by)} · ${v.changes.length} 处变更</span></div>
+        ${statusTag(v.status==='已发布'?'confirmed':v.status==='待审核'?'pending':'draft',v.status)}
+        <button class="btn btn-ghost btn-xs" onclick="versionModal('${p.id}',${v.v})">${ic('eye')}详情</button>
+      </div>`).join('')}</div>
+  </div>`;
+}
+function sourceStatusTag(s){const m={ok:['green','已就绪'],parsed:['blue','已解析']};const x=m[s]||['gray',s];return '<span class="tag '+x[0]+' dot">'+x[1]+'</span>';}
+function fileIcon(t){const m={excel:'doc',pdf:'doc',word:'doc',csv:'doc',image:'image'};return ic(m[t]||'doc');}
+
+/* ================= 编辑商品 / SKU ================= */
+function editProduct(id){
+  const p=productById(id);
+  openModal(`<div class="modal-h"><h3>编辑商品档案</h3><button class="icon-btn" onclick="closeModal()">${ic('close')}</button></div>
+    <div class="modal-b">
+      <div class="field"><label>商品名称</label><input class="input" id="epName" value="${esc(p.name)}"></div>
+      <div class="field"><label>商品描述</label><textarea class="input" id="epDesc">${esc(p.desc)}</textarea></div>
+      <div class="alert info">${ic('info')}<span>编辑将生成新的待审核版本，不覆盖已发布版本（演示逻辑）。</span></div>
+    </div>
+    <div class="modal-f"><button class="btn btn-secondary" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="saveEditProduct('${id}')">保存修改</button></div>`);
+}
+function saveEditProduct(id){
+  const p=productById(id);
+  const name=document.getElementById('epName').value.trim();
+  const desc=document.getElementById('epDesc').value.trim();
+  if(!name){toast('商品名称不能为空','error');return;}
+  const oldName=p.name,oldDesc=p.desc;
+  p.name=name;p.desc=desc;p.status='pending';p.statusNote='待审核';
+  p.currentVersion+=1;
+  p.versions.push({v:p.currentVersion,time:now(),by:'林运营',note:'编辑商品档案',status:'待审核',changes:[{f:'商品名称',before:oldName,after:name,reason:'人工编辑'},{f:'商品描述',before:oldDesc,after:desc,reason:'人工编辑'}]});
+  saveDB();closeModal();toast('已保存，生成待审核版本 V'+p.currentVersion,'success');render();
+}
+function addSku(id){
+  openModal(`<div class="modal-h"><h3>新增 SKU</h3><button class="icon-btn" onclick="closeModal()">${ic('close')}</button></div>
+    <div class="modal-b">
+      <div class="row"><div class="field"><label>颜色</label><input class="input" id="skuColor" placeholder="例如：暖米白"></div><div class="field"><label>尺寸</label><input class="input" id="skuSize" placeholder="例如：标准款"></div></div>
+    </div>
+    <div class="modal-f"><button class="btn btn-secondary" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="saveSku('${id}')">添加</button></div>`);
+}
+function saveSku(id){
+  const p=productById(id);
+  const color=document.getElementById('skuColor').value.trim()||'—';
+  const size=document.getElementById('skuSize').value.trim()||'—';
+  const n=p.skus.length+1;
+  p.skus.push({code:p.code+'-'+String(n).padStart(2,'0'),color,size,status:'draft'});
+  saveDB();closeModal();toast('已新增 SKU','success');render();
+}
+function editSku(id,code){
+  const p=productById(id);const s=p.skus.find(x=>x.code===code);if(!s)return;
+  openModal(`<div class="modal-h"><h3>编辑 SKU ${esc(code)}</h3><button class="icon-btn" onclick="closeModal()">${ic('close')}</button></div>
+    <div class="modal-b"><div class="row"><div class="field"><label>颜色</label><input class="input" id="esColor" value="${esc(s.color)}"></div><div class="field"><label>尺寸</label><input class="input" id="esSize" value="${esc(s.size)}"></div></div></div>
+    <div class="modal-f"><button class="btn btn-secondary" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="saveEditSku('${id}','${esc(code)}')">保存</button></div>`);
+}
+function saveEditSku(id,code){
+  const p=productById(id);const s=p.skus.find(x=>x.code===code);s.color=document.getElementById('esColor').value;s.size=document.getElementById('esSize').value;
+  saveDB();closeModal();toast('SKU 已更新','success');render();
+}
+
+/* ================= 字段来源弹窗 ================= */
+function sourceModal(productId,field){
+  const p=productById(productId);
+  const src=p.sources[0]||{name:'—',type:'—',size:'—'};
+  openModal(`<div class="modal-h"><h3>字段来源详情</h3><button class="icon-btn" onclick="closeModal()">${ic('close')}</button></div>
+    <div class="modal-b">
+      <div class="alert info">${ic('info')}<span>以下为模拟数据，用于演示字段级可追溯性，非真实供应商原件。</span></div>
+      <table class="tbl">
+        <tr><th style="width:130px">字段名称</th><td class="bold">${esc(field)}</td></tr>
+        <tr><th>原始文件</th><td>${esc(src.name)}</td></tr>
+        <tr><th>原始字段名</th><td>${esc(field)}</td></tr>
+        <tr><th>原始值</th><td>—</td></tr>
+        <tr><th>解析结果</th><td>候选值（AI 提取）</td></tr>
+        <tr><th>标准化结果</th><td class="bold">已确认</td></tr>
+        <tr><th>来源位置</th><td>Sheet1 · A5（示例定位）</td></tr>
+        <tr><th>最后修改人</th><td>林运营</td></tr>
+        <tr><th>确认状态</th><td>${statusTag('confirmed','已确认')}</td></tr>
+      </table>
+    </div>
+    <div class="modal-f"><button class="btn btn-primary" onclick="closeModal()">关闭</button></div>`);
+}
+
+/* ================= 版本详情 / 发布 ================= */
+function versionModal(productId,v){
+  const p=productById(productId);const ver=p.versions.find(x=>x.v===v);if(!ver)return;
+  openModal(`<div class="modal-h"><h3>版本 V${v} 详情</h3><button class="icon-btn" onclick="closeModal()">${ic('close')}</button></div>
+    <div class="modal-b">
+      <div class="flex gap12 mb"><span class="pill">${ic('clock')}${fmtTime(ver.time)}</span><span class="pill">${ic('users')}${esc(ver.by)}</span>${statusTag(ver.status==='已发布'?'confirmed':ver.status==='待审核'?'pending':'draft',ver.status)}</div>
+      <p class="mb">${esc(ver.note)}</p>
+      <table class="diff-table"><thead><tr><th>字段</th><th>修改前</th><th>修改后</th><th>原因</th></tr></thead>
+      <tbody>${ver.changes.map(c=>'<tr><td class="bold">'+esc(c.f)+'</td><td class="del">'+esc(c.before)+'</td><td class="add">'+esc(c.after)+'</td><td class="muted small">'+esc(c.reason)+'</td></tr>').join('')}</tbody></table>
+    </div>
+    <div class="modal-f"><button class="btn btn-primary" onclick="closeModal()">关闭</button></div>`);
+}
+function publishVersion(productId){
+  const p=productById(productId);
+  const pend=p.status==='pending';
+  const unresolved=DB.issues.filter(i=>i.productId===productId&&i.status==='pending'&&i.sev==='high').length;
+  if(unresolved>0){toast('存在 '+unresolved+' 个高严重度未处理问题，需先完成审核','error');go('data/quality');return;}
+  if(p.skus.length===0){toast('请先为商品添加 SKU','error');return;}
+  const v=p.currentVersion+1;
+  p.currentVersion=v;
+  p.status='confirmed';p.statusNote='已确认';
+  p.versions.push({v,time:now(),by:'林运营',note:'确认发布商品档案',status:'已发布',changes:[{f:'数据状态',before:pend?'待审核':'已确认',after:'已确认',reason:'人工确认发布'}]});
+  saveDB();toast('商品档案已发布 V'+v,'success');render();
+}
+
+/* ================= 资料导入与任务管理 ================= */
+let importWizard=null;
+function importWizardOpen(productId){
+  importWizard={step:1,mode:productId?'existing':'new',productId:productId||null,newProduct:{name:'',code:'',cat:'箱包'},files:[],assoc:{}};
+  renderImportWizard();
+}
+function renderImportWizard(){
+  const steps=['选择商品','上传资料','确认关联','资料清单','创建任务'];
+  let body='';
+  if(importWizard.step===1){
+    const prodOptions=DB.products.map(p=>'<option value="'+p.id+'" '+(importWizard.productId===p.id?'selected':'')+'>'+esc(p.name)+'（'+esc(p.code)+' · '+esc(p.category)+'）</option>').join('');
+    body=`<div class="field"><label>导入方式</label>
+      <div class="row"><button class="btn ${importWizard.mode==='existing'?'btn-primary':'btn-secondary'}" onclick="importWizard.mode='existing';importWizard.step=1;renderImportWizard()">为已有商品补充资料</button>
+      <button class="btn ${importWizard.mode==='new'?'btn-primary':'btn-secondary'}" onclick="importWizard.mode='new';renderImportWizard()">创建新商品并导入</button></div></div>
+      ${importWizard.mode==='existing'?`<div class="field"><label>选择目标商品</label><select class="input" id="iwProduct" onchange="importWizard.productId=this.value">${prodOptions}</select></div>`
+      :`<div class="row"><div class="field"><label>商品名称</label><input class="input" id="iwName" value="${esc(importWizard.newProduct.name)}" oninput="importWizard.newProduct.name=this.value"></div><div class="field"><label>商品编码</label><input class="input" id="iwCode" value="${esc(importWizard.newProduct.code)}" oninput="importWizard.newProduct.code=this.value"></div><div class="field"><label>品类</label><select class="input" id="iwCat" onchange="importWizard.newProduct.cat=this.value"><option>箱包</option><option>服饰</option><option>鞋靴</option><option>美妆个护</option></select></div></div>`}`;
+  }
+  else if(importWizard.step===2){
+    body=`<div class="dropzone" onclick="document.getElementById('iwFile').click()">${ic('upload',34)}<div class="bold">点击上传资料文件</div><div class="small muted">支持 Excel / CSV / PDF / Word / 图片（原型仅模拟，不真实解析）</div><input type="file" id="iwFile" multiple style="display:none" onchange="handleImportFiles(this.files)"></div>
+      <div class="mt" style="text-align:center"><button class="btn btn-ghost btn-sm" onclick="addMockFiles()">${ic('plus')}添加示例文件（无需选择）</button></div>
+      <div class="filelist mt" id="iwFiles">${importWizard.files.map((f,i)=>'<div class="file"><span class="fic">'+fileIcon(f.type)+'</span><div class="meta"><b>'+esc(f.name)+'</b><span>'+esc(f.type.toUpperCase())+' · '+esc(f.size)+'</span></div><button class="btn btn-ghost btn-xs" onclick="importWizard.files.splice('+i+',1);renderImportWizard()">'+ic('trash')+'</button></div>').join('')||'<div class="small muted" style="text-align:center;padding:12px">尚未选择文件</div>'}</div>`;
+  }
+  else if(importWizard.step===3){
+    body=`<p class="mb">确认文件与目标商品「${esc(importWizard.productId||importWizard.newProduct.name||'新商品')}」的关联关系：</p>
+      <div class="filelist">${importWizard.files.map(f=>'<div class="file"><span class="fic">'+fileIcon(f.type)+'</span><div class="meta"><b>'+esc(f.name)+'</b><span>关联到 '+(importWizard.mode==='existing'?esc(importWizard.productId):esc(importWizard.newProduct.name||'新商品'))+'</span></div><span class="tag blue">已关联</span></div>').join('')||'<div class="small muted">请先上传文件</div>'}</div>`;
+  }
+  else if(importWizard.step===4){
+    body=`<table class="tbl"><thead><tr><th>文件</th><th>格式</th><th>大小</th><th>处理状态</th></tr></thead><tbody>${importWizard.files.map(f=>'<tr><td class="bold">'+esc(f.name)+'</td><td>'+esc(f.type.toUpperCase())+'</td><td class="num">'+esc(f.size)+'</td><td>'+statusTag('queued','等待处理')+'</td></tr>').join('')||'<tr><td colspan="4" class="muted">无文件</td></tr>'}</tbody></table>`;
+  }
+  else if(importWizard.step===5){
+    body=`<div class="alert success">${ic('checkCircle')}<span>资料清单已确认，即将创建导入任务并进入处理进度页面。</span></div>
+      <table class="tbl"><tbody><tr><th style="width:140px">目标商品</th><td class="bold">${importWizard.mode==='existing'?esc(importWizard.productId):esc(importWizard.newProduct.name)}</td></tr><tr><th>文件数量</th><td>${importWizard.files.length}</td></tr></tbody></table>`;
+  }
+  const canNext=importWizard.step===1?true:(importWizard.step===2?importWizard.files.length>0:true);
+  openModal(`<div class="modal-h"><h3>导入商品资料</h3><button class="icon-btn" onclick="closeModal()">${ic('close')}</button></div>
+    <div class="stepper" style="padding:20px 22px 0">${steps.map((s,i)=>`<div class="step ${i+1<importWizard.step?'done':i+1===importWizard.step?'on':''}"><div class="dot">${i+1<importWizard.step?ic('check',14):(i+1)}</div><div class="txt">${s}</div><div class="line"></div></div>`).join('')}</div>
+    <div class="modal-b">${body}</div>
+    <div class="modal-f">
+      ${importWizard.step>1?'<button class="btn btn-secondary" onclick="importWizard.step--;renderImportWizard()">上一步</button>':''}
+      <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+      ${importWizard.step<5?'<button class="btn btn-primary" '+(canNext?'':'disabled')+' onclick="importWizard.step++;renderImportWizard()">下一步</button>':'<button class="btn btn-primary" onclick="createImportTask()">'+ic('check')+' 创建导入任务</button>'}
+    </div>`);
+}
+function handleImportFiles(files){
+  for(const f of files){importWizard.files.push({name:f.name,type:typeFromName(f.name),size:fmtSize(f.size)});}
+  renderImportWizard();
+}
+function typeFromName(n){const e=n.split('.').pop().toLowerCase();if(['xls','xlsx','csv'].includes(e))return 'excel';if(e==='pdf')return 'pdf';if(['doc','docx'].includes(e))return 'word';if(['png','jpg','jpeg','webp'].includes(e))return 'image';return 'doc';}
+function fmtSize(b){return b<1024?b+' B':b<1048576?(b/1024).toFixed(0)+' KB':(b/1048576).toFixed(1)+' MB';}
+function addMockFiles(){
+  const samples=[{name:'商品规格表.xlsx',type:'excel',size:'42 KB'},{name:'商品详情页.pdf',type:'pdf',size:'1.8 MB'},{name:'正面视角.png',type:'image',size:'2.4 MB'}];
+  samples.forEach((s,i)=>importWizard.files.push({name:s.name.replace('商品',importWizard.productId||'BP02'),type:s.type,size:s.size}));
+  renderImportWizard();
+}
+function createImportTask(){
+  let pid=importWizard.productId;
+  if(importWizard.mode==='new'){
+    const name=importWizard.newProduct.name||'新商品';const code=importWizard.newProduct.code||uid('P');
+    if(!importWizard.newProduct.name||!importWizard.newProduct.code){toast('请填写新商品名称与编码','error');importWizard.step=1;renderImportWizard();return;}
+    pid=code;
+    const colors={箱包:'#5a5fd6',服饰:'#d96a8b',鞋靴:'#2f7d6d',美妆个护:'#b5792f'};const icons={箱包:'bag',服饰:'shirt',鞋靴:'shoe',美妆个护:'jar'};
+    DB.products.push({id:code,name,code,category:importWizard.newProduct.cat,brand:'KELIN·客邻',status:'draft',statusNote:'草稿',currentVersion:1,color:colors[importWizard.newProduct.cat],icon:icons[importWizard.newProduct.cat],desc:'待提取',groups:[{title:'基础信息',icon:'box',fields:[['商品名称',name],['商品编码',code],['品类',importWizard.newProduct.cat],['商品状态','待提取']]}],skus:[],sources:importWizard.files.map(f=>({id:uid('src'),name:f.name,type:f.type,size:f.size,status:'parsed',angle:'正面',time:now()})),versions:[{v:1,time:now(),by:'系统导入',note:'初始提取',status:'待审核',changes:[]}]});
+  }
+  const task={id:uid('IMP'),name:(importWizard.mode==='existing'?pid:'新商品 '+pid)+' 资料导入',productId:pid,files:importWizard.files.length,time:now(),status:'queued',progress:0,steps:['解析','提取','清洗','审核','完成']};
+  DB.imports.unshift(task);
+  saveDB();closeModal();toast('导入任务已创建','success');
+  // 模拟任务进度
+  simulateImportProgress(task.id);
+  go('data/imports');
+}
+function simulateImportProgress(taskId){
+  const seq=[['parsing',12],['parsing',36],['extracting',55],['cleaning',78],['cleaning',92],['awaiting',100]];
+  let i=0;
+  const iv=setInterval(()=>{
+    const t=DB.imports.find(x=>x.id===taskId);if(!t){clearInterval(iv);return;}
+    if(i>=seq.length){clearInterval(iv);return;}
+    t.status=seq[i][0];t.progress=seq[i][1];saveDB();
+    if(state.center==='data'&&state.sub==='imports')render();
+    i++;
+  },450);
+}
+function pageImports(){
+  return `
+  <div class="page-head">
+    <div class="row"><div><div class="h1">资料导入与任务管理</div><div class="desc">导入商品原始资料，追踪每份资料的处理状态。原型阶段模拟文件解析，不真实调用解析服务。</div></div>
+      <div class="actions"><button class="btn btn-primary" onclick="importWizardOpen()">${ic('upload')}新建导入任务</button></div></div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>导入任务列表</h3><span class="sub">${DB.imports.length} 个任务</span></div>
+    <div class="card-b" style="padding-top:0">
+      <table class="tbl">
+        <thead><tr><th>任务编号</th><th>任务名称</th><th>关联商品</th><th>文件</th><th>导入时间</th><th>状态</th><th>进度</th><th style="text-align:right">操作</th></tr></thead>
+        <tbody>
+        ${DB.imports.length?DB.imports.map(t=>`<tr class="clickable" onclick="importTaskDetail('${t.id}')">
+          <td class="num">${esc(t.id)}</td><td class="bold">${esc(t.name)}</td><td>${esc(t.productId)}</td><td class="num">${t.files}</td><td class="muted small">${fmtTime(t.time)}</td>
+          <td>${statusTag(t.status,IMPORT_STATUS[t.status]||t.status)}</td>
+          <td style="width:160px"><div class="progress ${t.status==='done'?'green':t.status==='awaiting'?'orange':''}"><i style="width:${t.progress}%"></i></div></td>
+          <td><div class="act" style="justify-content:flex-end" onclick="event.stopPropagation()"><button class="btn btn-ghost btn-xs" onclick="importTaskDetail('${t.id}')">详情</button></div></td>
+        </tr>`).join(''):'<tr><td colspan="8"><div class="empty"><div class="art">'+ic('upload',30)+'</div><h4>暂无导入任务</h4><p>上传商品原始资料以开始数据治理。</p><div class="actions"><button class="btn btn-primary btn-sm" onclick="importWizardOpen()">新建导入任务</button></div></div></td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+function importTaskDetail(id){
+  const t=DB.imports.find(x=>x.id===id);if(!t)return;
+  const p=productById(t.productId);
+  openModal(`<div class="modal-h"><h3>导入任务详情</h3><button class="icon-btn" onclick="closeModal()">${ic('close')}</button></div>
+    <div class="modal-b">
+      <div class="flex gap12 mb">${statusTag(t.status,IMPORT_STATUS[t.status]||t.status)}<span class="pill">${ic('box')}${esc(t.productId)}</span><span class="pill">${ic('doc')}${t.files} 个文件</span></div>
+      <div class="mb"><div class="small muted mb" style="margin-bottom:6px">处理进度 ${t.progress}%</div><div class="progress"><i style="width:${t.progress}%"></i></div></div>
+      <table class="tbl"><thead><tr><th>文件</th><th>格式</th><th>大小</th><th>状态</th><th>解析结果</th></tr></thead><tbody>
+      ${(p&&p.sources||[]).slice(0,t.files).map(s=>'<tr><td class="bold">'+esc(s.name)+'</td><td>'+esc(s.type.toUpperCase())+'</td><td class="num">'+esc(s.size)+'</td><td>'+sourceStatusTag(s.status)+'</td><td class="small muted">'+esc(s.status==='parsed'?'已提取候选字段':'已就绪')+'</td></tr>').join('')||'<tr><td colspan="5" class="muted small">文件清单示例</td></tr>'}
+      </tbody></table>
+      ${t.status==='failed'?'<div class="alert error mt">'+ic('alert')+'<span>解析失败：文件格式不支持或内容为空。请检查文件后重试。</span></div>':''}
+    </div>
+    <div class="modal-f">
+      ${['parsing','extracting','cleaning','queued'].includes(t.status)?'<button class="btn btn-secondary" onclick="closeModal()">处理中…</button>':''}
+      ${t.status==='awaiting'?'<button class="btn btn-primary" onclick="closeModal();go(\'data/cleaning\')">'+ic('sparkle')+'进入数据清洗</button>':''}
+      <button class="btn btn-secondary" onclick="closeModal()">关闭</button>
+    </div>`);
+}
+
+/* ================= AI 数据清洗 ================= */
+const CLEANING={
+  BP01:{
+    original:[['Weight','0.65kg'],['Main Material','70% Wool'],['Material Composition','30% Polyester'],['Dimensions','28×24×12cm'],['Color','Warm Beige'],['Capacity','18L']],
+    extracted:[['Weight','0.65kg'],['Main Material','70% Wool'],['Material Composition','30% Polyester'],['Dimensions','28×24×12cm'],['Color','暖米白'],['Capacity','18L']],
+    standard:[['weight_g','650 g'],['body_material','70% 羊毛'],['body_material','30% 聚酯纤维'],['dimensions_cm','28×24×12 cm'],['color','暖米白'],['capacity_l','18 L']]
+  },
+  CL01:{
+    original:[['Fabric','100% Viscose'],['Size Range','S-XL'],['Length','Midi'],['Color','Floral']],
+    extracted:[['Fabric','100% Viscose'],['Size Range','S-XL'],['Length','Midi'],['Color','碎花']],
+    standard:[['fabric','100% 粘胶纤维'],['size_range','S / M / L / XL'],['length','中长款'],['color','碎花 / 米白底']]
+  },
+  SH01:{
+    original:[['Upper','Mesh'],['Midsole','EVA'],['Size','35-44'],['Color','Cloud White']],
+    extracted:[['Upper','透气网布'],['Midsole','EVA 回弹'],['Size','35-44'],['Color','云雾白']],
+    standard:[['upper_material','透气网布'],['midsole','EVA 回弹中底'],['size_range','35-44'],['color','云雾白 / 炭黑']]
+  },
+  SK01:{
+    original:[['Volume','120ml'],['Key Ingredient','Amino acid surfactant'],['pH','5.5-6.5']],
+    extracted:[['Volume','120ml'],['Key Ingredient','氨基酸表活'],['pH','5.5-6.5']],
+    standard:[['volume_ml','120 ml'],['key_ingredient','氨基酸表活'],['ph','5.5-6.5']]
+  }
+};
+function pageCleaning(){
+  const pid=state.productId||'BP01';
+  const p=productById(pid)||DB.products[0];
+  const data=CLEANING[p.id]||CLEANING.BP01;
+  const map=[
+    {f:'字段名称映射',d:'Weight → weight_g（映射到标准字段）'},
+    {f:'单位统一',d:'0.65kg → 650 g（kg 换算为 g）'},
+    {f:'数据格式统一',d:'28×24×12cm → 28×24×12 cm（分隔符规范）'},
+    {f:'同义词归一',d:'Wool → 羊毛、Viscose → 粘胶纤维'},
+    {f:'结构化转换',d:'扁平字段 → 分组属性结构'},
+    {f:'异常识别',d:'检测到尺寸冲突，已转入质量审核'},
+    {f:'多来源关联',d:'关联规格表 + 详情页 PDF 两个来源'}
+  ];
+  return `
+  <div class="page-head">
+    <div class="row"><div><div class="h1">AI 数据清洗与标准化</div><div class="desc">从原始资料提取商品信息，统一不同来源、不同表达方式的数据为标准字段。AI 置信度为模拟数据，不替代事实证据与人工审核。</div></div>
+      <div class="actions"><select class="input" onchange="go('data/cleaning/'+this.value)">${DB.products.map(x=>'<option value="'+x.id+'" '+(p.id===x.id?'selected':'')+'>'+esc(x.name)+'</option>').join('')}</select></div></div>
+  </div>
+  <div class="threecol">
+    <div class="pane"><div class="pane-h">${ic('doc')}<b>原始资料</b><span class="cap">${esc(p.id)}-规格表.xlsx</span></div>
+      <div class="pane-b">${data.original.map(r=>'<div class="map-row"><div class="k">'+ic('link')+esc(r[0])+'</div><div class="v">'+esc(r[1])+'</div></div>').join('')}
+      <div class="small muted mt">来源位置：Sheet1 · 示例定位（模拟）</div></div>
+    </div>
+    <div class="pane"><div class="pane-h">${ic('sparkle')}<b>AI 提取结果</b><span class="cap">置信度（模拟）</span></div>
+      <div class="pane-b">${data.extracted.map(r=>'<div class="map-row"><div class="k">'+ic('sparkle')+esc(r[0])+' <span class="tag blue">高置信</span></div><div class="v">'+esc(r[1])+'</div><div class="evi" onclick="toast(\'展示原始证据（模拟）\',\'info\')">'+ic('eye',14)+'查看原始证据</div></div>').join('')}</div>
+    </div>
+    <div class="pane"><div class="pane-h">${ic('checkCircle')}<b>标准化结果</b><span class="cap">标准字段</span></div>
+      <div class="pane-b">${data.standard.map(r=>'<div class="map-row" style="background:#fff"><div class="k">'+ic('check')+esc(r[0])+'</div><div class="v">'+esc(r[1])+' <span class="tag green">已标准化</span></div></div>').join('')}</div>
+    </div>
+  </div>
+  <div class="card mt">
+    <div class="card-h"><h3>标准化处理能力</h3><span class="sub">模拟展示</span></div>
+    <div class="card-b"><div class="attr-grid" style="grid-template-columns:repeat(2,1fr)">${map.map(m=>'<div class="av" style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;border-bottom:1px solid var(--line-2);padding:10px 0"><div class="bold">'+ic('check',14)+' '+esc(m.f)+'</div><div class="small muted">'+esc(m.d)+'</div></div>').join('')}</div></div>
+  </div>
+  <div class="alert info mt">${ic('info')}<span>AI 置信度仅作为参考，不能替代事实证据与人工审核。所有字段仍须在「数据质量审核」中确认。</span></div>`;
+}
+
+/* ================= 数据质量审核 ================= */
+let qualityFilter={type:'',status:'pending',product:''};
+function pageQuality(){
+  const list=DB.issues.filter(i=>{
+    if(qualityFilter.product && i.productId!==qualityFilter.product)return false;
+    if(qualityFilter.type && i.type!==qualityFilter.type)return false;
+    if(qualityFilter.status && i.status!==qualityFilter.status)return false;
+    return true;
+  });
+  const TYPE={conflict:'数据冲突',missing:'信息缺失',unclear:'来源不明确',format:'格式错误',duplicate:'重复商品'};
+  const SEV={high:'高',medium:'中',low:'低'};
+  return `
+  <div class="page-head">
+    <div class="row"><div><div class="h1">数据质量检查与人工审核</div><div class="desc">集中管理商品数据中的异常、缺失与冲突。解决冲突不等于自动发布，需重新质检后由用户正式确认。</div></div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card"><div class="card-h"><h3>质量检查维度</h3></div><div class="card-b">
+      ${['完整性：关键字段是否缺失','准确性：字段值是否具有来源依据','一致性：不同文件的同一字段是否冲突','唯一性：商品与 SKU 是否重复','合理性：数值与字段组合是否符合规则','可追溯性：字段能否追溯到原始文件'].map((d,i)=>'<div class="av" style="display:flex;justify-content:space-between;border-bottom:1px dashed var(--line-2);padding:9px 0"><span>'+esc(d)+'</span>'+ic('checkCircle',16)+'</div>').join('')}
+    </div></div>
+    <div class="card"><div class="card-h"><h3>问题概览</h3></div><div class="card-b">
+      ${Object.entries(TYPE).map(([k,v])=>{const n=DB.issues.filter(i=>i.type===k&&i.status==='pending').length;return '<div class="av" style="display:flex;justify-content:space-between;border-bottom:1px dashed var(--line-2);padding:9px 0"><span>'+v+'</span><span class="tag '+(n?'red':'gray')+'">'+n+'</span></div>';}).join('')}
+    </div></div>
+  </div>
+  <div class="card mt">
+    <div class="card-h"><h3>问题列表</h3><span class="sub">${list.length} 个问题</span></div>
+    <div class="card-b" style="padding-top:0">
+      <div class="filters" style="margin-top:16px">
+        <select class="input" onchange="qualityFilter.product=this.value;render()"><option value="">全部商品</option>${DB.products.map(p=>'<option value="'+p.id+'" '+(qualityFilter.product===p.id?'selected':'')+'>'+esc(p.name)+'</option>').join('')}</select>
+        <select class="input" onchange="qualityFilter.type=this.value;render()"><option value="">全部问题类型</option>${Object.entries(TYPE).map(([k,v])=>'<option value="'+k+'" '+(qualityFilter.type===k?'selected':'')+'>'+v+'</option>').join('')}</select>
+        <select class="input" onchange="qualityFilter.status=this.value;render()"><option value="">全部状态</option><option value="pending">待处理</option><option value="resolved">已处理</option></select>
+        <span class="spacer"></span>
+      </div>
+      <table class="tbl"><thead><tr><th>商品</th><th>问题字段</th><th>问题类型</th><th>严重度</th><th>状态</th><th>问题说明</th><th style="text-align:right">操作</th></tr></thead><tbody>
+      ${list.length?list.map(i=>`<tr><td class="bold">${esc(i.productId)}</td><td>${esc(i.field)}</td><td><span class="tag ${i.type==='conflict'?'red':i.type==='missing'?'orange':'blue'}">${TYPE[i.type]}</span></td><td>${SEV[i.sev]}</td><td>${statusTag(i.status==='pending'?'pending':'confirmed',i.status==='pending'?'待处理':'已处理')}</td><td class="small muted">${esc(i.desc)}</td><td><div class="act" style="justify-content:flex-end"><button class="btn btn-soft btn-xs" onclick="qualityHandle('${i.id}')">${i.status==='pending'?'处理':'查看'}</button></div></td></tr>`).join(''):'<tr><td colspan="7"><div class="empty"><div class="art">'+ic('checkCircle',30)+'</div><h4>没有匹配的问题</h4><p>调整筛选条件查看其他问题。</p></div></td></tr>'}
+      </tbody></table>
+    </div>
+  </div>`;
+}
+function qualityHandle(id){
+  const i=DB.issues.find(x=>x.id===id);if(!i)return;
+  if(i.type==='conflict'){conflictModal(i);}
+  else {simpleIssueModal(i);}
+}
+function conflictModal(i){
+  openModal(`<div class="modal-h"><h3>数据冲突审核</h3><button class="icon-btn" onclick="closeModal()">${ic('close')}</button></div>
+    <div class="modal-b">
+      <div class="alert warn">${ic('alert')}<span>字段「${esc(i.field)}」存在来源冲突，请人工确认最终值。</span></div>
+      <table class="tbl"><thead><tr><th>来源</th><th>文件位置</th><th>原始值</th></tr></thead><tbody>
+      ${i.sources.map(s=>'<tr><td class="bold">'+esc(s.name)+'</td><td class="small muted">'+esc(s.loc)+'</td><td class="bold">'+esc(s.value)+'</td></tr>').join('')}</tbody></table>
+      <div class="mt" style="background:var(--surface-2);border-radius:10px;padding:12px 14px">
+        <div class="bold small">AI 冲突判断</div><div class="small mt" style="margin-top:4px">${esc(i.aiJudge)}</div>
+        <div class="bold small mt" style="margin-top:10px">AI 建议</div><div class="small" style="margin-top:4px;color:var(--brand)">建议采用：${esc(i.suggestion)}</div>
+      </div>
+      <div class="field mt"><label>选择处理方式</label>
+        ${i.sources.map((s,idx)=>'<label class="file" style="margin-bottom:8px;cursor:pointer"><input type="radio" name="conflictSel" value="'+esc(s.value)+'" '+(idx===0?'checked':'')+'> <span class="meta"><b>采用来源 '+(idx===0?'A':'B')+'：'+esc(s.value)+'</b><span>'+esc(s.name)+'</span></span></label>').join('')}
+        <label class="file" style="margin-bottom:8px;cursor:pointer"><input type="radio" name="conflictSel" value="manual"> <span class="meta"><b>手动输入正确值</b></span></label>
+      </div>
+      <div class="field" id="manualWrap" style="display:none"><label>手动输入值</label><input class="input" id="manualVal" placeholder="输入正确值"></div>
+    </div>
+    <div class="modal-f"><button class="btn btn-secondary" onclick="closeModal()">暂不处理</button><button class="btn btn-primary" onclick="resolveConflict('${i.id}')">${ic('check')}确认处理</button></div>`);
+  document.querySelectorAll('input[name="conflictSel"]').forEach(r=>r.addEventListener('change',e=>{document.getElementById('manualWrap').style.display=e.target.value==='manual'?'block':'none';}));
+}
+function resolveConflict(id){
+  const i=DB.issues.find(x=>x.id===id);
+  const sel=document.querySelector('input[name="conflictSel"]:checked');
+  let final=sel.value;
+  if(final==='manual'){final=document.getElementById('manualVal').value.trim();if(!final){toast('请输入手动值','error');return;}}
+  i.status='resolved';i.finalValue=final;i.reviewer='林运营';i.reviewedAt=now();i.basis=sel.value==='manual'?'人工录入':'来源 '+sel.value;
+  saveDB();closeModal();toast('冲突已处理，记录最终值：'+final,'success');render();
+}
+function simpleIssueModal(i){
+  const TYPE={missing:'信息缺失',unclear:'来源不明确',format:'格式错误',duplicate:'重复商品'};
+  openModal(`<div class="modal-h"><h3>处理问题：${TYPE[i.type]||i.type}</h3><button class="icon-btn" onclick="closeModal()">${ic('close')}</button></div>
+    <div class="modal-b">
+      <div class="alert info">${ic('info')}<span>${esc(i.desc)}</span></div>
+      <div class="field"><label>${i.type==='missing'?'补充值（可选补充资料）':i.type==='format'?'标准值':i.type==='unclear'?'关联来源':'处理方式'}</label>
+      <input class="input" id="siVal" value="${esc(i.suggestion||'')}" placeholder="${i.type==='unclear'?'重新关联来源说明':'输入值'}"></div>
+      <label class="file" style="cursor:pointer"><input type="checkbox" id="siNeedMore"> <span class="meta"><b>标记为需补充资料</b></span></label>
+    </div>
+    <div class="modal-f"><button class="btn btn-secondary" onclick="closeModal()">暂不处理</button><button class="btn btn-primary" onclick="resolveSimple('${i.id}')">${ic('check')}确认</button></div>`);
+}
+function resolveSimple(id){
+  const i=DB.issues.find(x=>x.id===id);
+  const needMore=document.getElementById('siNeedMore').checked;
+  const val=document.getElementById('siVal').value.trim();
+  if(needMore){i.status='resolved';i.finalValue='需补充资料';i.reviewer='林运营';i.reviewedAt=now();i.basis='标记需补充资料';}
+  else if(val){i.status='resolved';i.finalValue=val;i.reviewer='林运营';i.reviewedAt=now();i.basis='人工录入';}
+  else {toast('请输入值或标记需补充资料','error');return;}
+  saveDB();closeModal();toast('问题已处理','success');render();
+}
+
+/* ================= 版本管理 ================= */
+function pageVersions(){
+  const all=DB.products.flatMap(p=>p.versions.map(v=>({...v,productId:p.id,productName:p.name})));
+  all.sort((a,b)=>new Date(b.time)-new Date(a.time));
+  return `
+  <div class="page-head">
+    <div class="row"><div><div class="h1">商品版本管理</div><div class="desc">商品档案每次正式发布后形成独立不可变版本，历史版本不被覆盖，可对比任意两个版本。</div></div></div>
+  </div>
+  <div class="grid-2-1">
+    <div class="card">
+      <div class="card-h"><h3>版本记录</h3><span class="sub">${all.length} 条</span></div>
+      <div class="card-b" style="padding-top:0">
+        <table class="tbl"><thead><tr><th>版本</th><th>商品</th><th>创建时间</th><th>创建人</th><th>状态</th><th style="text-align:right">操作</th></tr></thead><tbody>
+        ${all.map(v=>`<tr><td class="bold">V${v.v}</td><td>${esc(v.productName)}</td><td class="small muted">${fmtTime(v.time)}</td><td>${esc(v.by)}</td><td>${statusTag(v.status==='已发布'?'confirmed':v.status==='待审核'?'pending':'draft',v.status)}</td><td><div class="act" style="justify-content:flex-end"><button class="btn btn-ghost btn-xs" onclick="versionModal('${v.productId}',${v.v})">详情</button></div></td></tr>`).join('')}
+        </tbody></table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>版本对比</h3></div>
+      <div class="card-b">
+        <p class="small muted mb">选择两个版本进行差异对比（模拟）。</p>
+        <div class="field"><label>商品</label><select class="input" id="vcProd" onchange="fillVersionSelects()">${DB.products.map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join('')}</select></div>
+        <div class="row"><div class="field"><label>版本 A</label><select class="input" id="vcA">${versionOptions(DB.products[0]?DB.products[0].id:'')}</select></div><div class="field"><label>版本 B</label><select class="input" id="vcB">${versionOptions(DB.products[0]?DB.products[0].id:'')}</select></div></div>
+        <button class="btn btn-primary" style="width:100%" onclick="runVersionCompare()">${ic('eye')}对比版本</button>
+      </div>
+    </div>
+  </div>`;
+}
+function runVersionCompare(){
+  const p=productById(document.getElementById('vcProd').value);
+  if(!p||p.versions.length<1){toast('该商品暂无版本','error');return;}
+  const a=parseInt(document.getElementById('vcA').value);const b=parseInt(document.getElementById('vcB').value);
+  const va=p.versions.find(x=>x.v===a);const vb=p.versions.find(x=>x.v===b);
+  if(!va||!vb){toast('请选择要对比的两个版本','error');return;}
+  const fieldsA=va.changes.reduce((m,c)=>m.set(c.f,c.after),new Map());
+  const fieldsB=vb.changes.reduce((m,c)=>m.set(c.f,c.after),new Map());
+  const keys=new Set([...fieldsA.keys(),...fieldsB.keys()]);
+  openModal(`<div class="modal-h"><h3>版本对比 V${a} → V${b}</h3><button class="icon-btn" onclick="closeModal()">${ic('close')}</button></div>
+    <div class="modal-b"><table class="diff-table"><thead><tr><th>字段</th><th>V${a}</th><th>V${b}</th></tr></thead><tbody>
+    ${[...keys].map(k=>{const x=fieldsA.get(k)||'—';const y=fieldsB.get(k)||'—';const diff=x!==y;return '<tr><td class="bold">'+esc(k)+'</td><td class="'+(diff?'del':'')+'">'+esc(x)+'</td><td class="'+(diff?'add':'')+'">'+esc(y)+'</td></tr>';}).join('')}
+    </tbody></table></div>
+    <div class="modal-f"><button class="btn btn-primary" onclick="closeModal()">关闭</button></div>`);
+}
+function versionOptions(productId){
+  const p=productById(productId);if(!p||!p.versions.length)return '<option value="">无版本</option>';
+  return p.versions.map(v=>'<option value="'+v.v+'">V'+v.v+' · '+esc(v.note)+'</option>').join('');
+}
+function fillVersionSelects(){
+  const pid=document.getElementById('vcProd').value;
+  document.getElementById('vcA').innerHTML=versionOptions(pid);
+  const b=document.getElementById('vcB');b.innerHTML=versionOptions(pid);
+  const p=productById(pid);if(p&&p.versions.length>1){const opts=b.querySelectorAll('option');opts[opts.length-1].selected=true;}
+}
+
+/* ================= AI 内容策划中心 ================= */
+const SCENES=['新品上架','节日活动','日常种草','促销活动','品牌宣传','商品焕新'];
+const CHANNELS=['淘宝','天猫','京东','抖音','小红书','微信公众号','其他渠道'];
+const CONTENT_TYPES=['商品主图','商品详情图','商品卖点图','商品场景图','社交媒体图文','短视频','商品宣传视频'];
+const GOALS=['突出商品卖点','提升商品点击率','提高商品转化','建立品牌形象','促进用户种草','强调商品差异化'];
+const STYLES=['高级极简','自然生活','轻奢质感','年轻活力','温暖治愈','时尚潮流'];
+const AUDIENCES=['18-24 岁学生群体','25-40 岁都市女性','25-35 岁职场白领','30-45 岁品质消费人群','运动健身人群','敏感肌人群'];
+const PLAN_STAGES=[['insight','商品理解'],['strategy','营销策略'],['image','图片策划'],['video','视频分镜'],['review','审核确认']];
+const SP_TYPE={fact:['green','事实卖点'],derived:['blue','创意推导'],unverified:['orange','待核实']};
+
+function currentPlan(){return state.planId?planById(state.planId):null;}
+
+function planStageNav(plan){
+  return `<div class="card" style="margin-bottom:18px"><div class="card-b" style="padding:12px 16px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span class="pill">${ic('box')}${esc(plan.productId)} · V${plan.productVersion}</span>
+      <span class="pill">${ic('flag')}${esc(plan.scene||'—')}</span>
+      <span class="pill">${ic('video')}${esc(plan.channel||'—')}</span>
+      <span class="spacer" style="flex:1"></span>
+      <span class="small muted">Agent 工作流</span>
+      ${PLAN_STAGES.map(s=>'<button class="btn '+(state.sub===s[0]?'btn-soft':'btn-ghost')+' btn-xs" onclick="go(\'plans/'+plan.id+'/'+s[0]+'\')">'+esc(s[1])+'</button>').join('')}
+    </div>
+  </div></div>`;
+}
+
+/* ---- 策划任务列表 ---- */
+let planFilter={q:'',status:''};
+function pagePlanList(){
+  const list=DB.plans.filter(p=>{
+    if(planFilter.q && !(p.name+p.productId).toLowerCase().includes(planFilter.q.toLowerCase()))return false;
+    if(planFilter.status && p.status!==planFilter.status)return false;
+    return true;
+  });
+  const st={all:DB.plans.length,running:DB.plans.filter(p=>['understanding','strategy','creative','content'].includes(p.status)).length,review:DB.plans.filter(p=>p.status==='review').length,confirmed:DB.plans.filter(p=>p.status==='confirmed').length,archived:DB.plans.filter(p=>p.status==='archived').length};
+  const STATUS={draft:'草稿',understanding:'正在理解商品',strategy:'正在生成策略',creative:'正在生成创意',content:'正在生成内容方案',review:'待人工审核',confirmed:'已确认',archived:'已归档',failed:'生成失败'};
+  return `
+  <div class="page-head">
+    <div class="row"><div><div class="h1">AI 内容策划</div><div class="desc">基于已确认的商品档案，完成商品理解、卖点提取、营销策略与可执行的图片/视频内容方案。</div></div>
+      <div class="actions"><button class="btn btn-primary" onclick="planWizardOpen()">${ic('plus')}创建策划任务</button></div></div>
+  </div>
+  <div class="stats" style="grid-template-columns:repeat(5,1fr)">
+    <div class="stat"><div class="lbl">${ic('list')}全部策划</div><div class="num">${st.all}</div></div>
+    <div class="stat"><div class="lbl">${ic('workflow')}进行中</div><div class="num" style="color:var(--info)">${st.running}</div></div>
+    <div class="stat"><div class="lbl">${ic('clock')}待审核</div><div class="num" style="color:var(--warning)">${st.review}</div></div>
+    <div class="stat"><div class="lbl">${ic('checkCircle')}已确认</div><div class="num" style="color:var(--success)">${st.confirmed}</div></div>
+    <div class="stat"><div class="lbl">${ic('archive')}已归档</div><div class="num">${st.archived}</div></div>
+  </div>
+  <div class="card">
+    <div class="card-h"><h3>策划任务列表</h3><span class="sub">${list.length} 个任务</span></div>
+    <div class="card-b" style="padding-top:0">
+      <div class="filters" style="margin-top:16px">
+        <div class="searchbox" style="width:240px">${ic('search')}<input placeholder="搜索策划名称 / 商品" value="${esc(planFilter.q)}" oninput="planFilter.q=this.value;render()"></div>
+        <select class="input" onchange="planFilter.status=this.value;render()"><option value="">全部状态</option>${Object.entries(STATUS).map(([k,v])=>'<option value="'+k+'" '+(planFilter.status===k?'selected':'')+'>'+v+'</option>').join('')}</select>
+        <span class="spacer"></span>
+      </div>
+      <table class="tbl"><thead><tr><th>策划名称</th><th>商品</th><th>版本</th><th>营销场景</th><th>内容类型</th><th>当前阶段</th><th>状态</th><th>更新时间</th><th style="text-align:right">操作</th></tr></thead><tbody>
+      ${list.length?list.map(p=>`<tr class="clickable" onclick="go('plans/${p.id}/insight')">
+        <td class="bold">${esc(p.name)}</td><td>${esc(p.productId)}</td><td class="num">V${p.productVersion}</td><td>${esc(p.scene||'—')}</td><td>${esc(p.contentType||'—')}</td>
+        <td><span class="pill">${esc(p.stage||'—')}</span></td><td>${statusTag(p.status,STATUS[p.status]||p.status)}</td><td class="small muted">${fmtTime(p.updatedAt)}</td>
+        <td><div class="act" style="justify-content:flex-end" onclick="event.stopPropagation()">
+          <button class="btn btn-soft btn-xs" onclick="go('plans/${p.id}/insight')">查看</button>
+          <button class="btn btn-ghost btn-xs" onclick="copyPlan('${p.id}')">${ic('copy')}</button>
+        </div></td></tr>`).join(''):'<tr><td colspan="9"><div class="empty"><div class="art">'+ic('sparkle',30)+'</div><h4>暂无策划任务</h4><p>从已确认的商品档案创建第一个内容策划任务。</p><div class="actions"><button class="btn btn-primary btn-sm" onclick="planWizardOpen()">创建策划任务</button></div></div></td></tr>'}
+      </tbody></table>
+    </div>
+  </div>`;
+}
+function copyPlan(id){
+  const p=planById(id);const n={...JSON.parse(JSON.stringify(p)),id:uid('PL'),name:p.name+'（副本）',status:'draft',stage:'草稿',updatedAt:now(),versions:[]};
+  DB.plans.unshift(n);saveDB();toast('已复制策划任务','success');render();
+}
+
+/* ---- 创建策划任务页面（作为导航页，自动弹出向导） ---- */
+function pagePlanNew(){
+  setTimeout(()=>planWizardOpen(),0);
+  return `<div class="page-head"><div class="row"><div><div class="h1">创建策划任务</div><div class="desc">告诉 AI：为哪个商品、面向什么用户、在哪个渠道、通过什么形式实现什么营销目标。</div></div></div></div>
+  <div class="card"><div class="card-b" style="padding:32px">
+    ${emptyState('创建策划任务向导','创建向导已在弹窗中打开；若未弹出，点击下方按钮重新打开。',"planWizardOpen()",'打开创建向导')}
+  </div></div>`;
+}
+
+/* ---- 创建策划任务（8 步向导） ---- */
+let planWizard=null;
+function planWizardOpen(){
+  planWizard={step:1,productId:null,sku:null,scene:'',channel:'',contentType:'',audience:'',customAudience:'',goal:'',style:'',styleDesc:'',refImg:null,name:''};
+  renderPlanWizard();
+}
+function renderPlanWizard(){
+  const steps=['选择商品','营销场景','营销渠道','内容形式','目标人群','营销目标','风格参考','确认任务'];
+  const confirmed=DB.products.filter(p=>p.status==='confirmed');
+  let body='';
+  if(planWizard.step===1){
+    body=`<div class="alert info">${ic('info')}<span>只有「已确认」的商品档案才能创建正式策划任务。</span></div>
+      <div class="filelist">${confirmed.map(p=>'<label class="file" style="cursor:pointer"><input type="radio" name="pwProd" value="'+p.id+'" '+(planWizard.productId===p.id?'checked':'')+' onchange="planWizard.productId=this.value;renderPlanWizard()">'+productThumb(p,44)+'<div class="meta"><b>'+esc(p.name)+'</b><span>'+esc(p.code)+' · '+esc(p.category)+' · V'+p.currentVersion+' · '+p.skus.length+' SKU</span></div>'+statusTag('confirmed','已确认')+'</label>').join('')||'<div class="empty"><p>暂无已确认商品，请先在商品数据中心完成商品档案确认。</p></div>'}</div>
+      ${planWizard.productId?`<div class="field mt"><label>选择 SKU</label><select class="input" onchange="planWizard.sku=this.value">${(productById(planWizard.productId).skus||[]).map(s=>'<option>'+esc(s.code)+' · '+esc(s.color)+'</option>').join('')||'<option>无 SKU</option>'}</select></div>`:''}`;
+  }
+  else if(planWizard.step===2){body=`<div class="field"><label>营销场景</label><div class="row" style="flex-wrap:wrap">${SCENES.map(s=>'<button class="btn '+(planWizard.scene===s?'btn-primary':'btn-secondary')+'" onclick="planWizard.scene=\''+s+'\';renderPlanWizard()">'+s+'</button>').join('')}</div></div>`;}
+  else if(planWizard.step===3){body=`<div class="field"><label>营销渠道</label><div class="row" style="flex-wrap:wrap">${CHANNELS.map(s=>'<button class="btn '+(planWizard.channel===s?'btn-primary':'btn-secondary')+'" onclick="planWizard.channel=\''+s+'\';renderPlanWizard()">'+s+'</button>').join('')}</div></div>`;}
+  else if(planWizard.step===4){body=`<div class="field"><label>内容形式（与渠道区分）</label><div class="row" style="flex-wrap:wrap">${CONTENT_TYPES.map(s=>'<button class="btn '+(planWizard.contentType===s?'btn-primary':'btn-secondary')+'" onclick="planWizard.contentType=\''+s+'\';renderPlanWizard()">'+s+'</button>').join('')}</div></div>`;}
+  else if(planWizard.step===5){body=`<div class="field"><label>目标人群</label><div class="row" style="flex-wrap:wrap">${AUDIENCES.map(s=>'<button class="btn '+(planWizard.audience===s?'btn-primary':'btn-secondary')+'" onclick="planWizard.audience=\''+s+'\';renderPlanWizard()">'+s+'</button>').join('')}</div></div>
+    <div class="field"><label>自定义人群 / 用户画像</label><textarea class="input" placeholder="描述用户画像与消费需求" oninput="planWizard.customAudience=this.value">${esc(planWizard.customAudience)}</textarea></div>`;}
+  else if(planWizard.step===6){body=`<div class="field"><label>营销目标</label><div class="row" style="flex-wrap:wrap">${GOALS.map(s=>'<button class="btn '+(planWizard.goal===s?'btn-primary':'btn-secondary')+'" onclick="planWizard.goal=\''+s+'\';renderPlanWizard()">'+s+'</button>').join('')}</div></div>`;}
+  else if(planWizard.step===7){body=`<div class="field"><label>视觉风格</label><div class="row" style="flex-wrap:wrap">${STYLES.map(s=>'<button class="btn '+(planWizard.style===s?'btn-primary':'btn-secondary')+'" onclick="planWizard.style=\''+s+'\';renderPlanWizard()">'+s+'</button>').join('')}</div></div>
+    <div class="field"><label>品牌风格描述</label><textarea class="input" placeholder="例如：温暖、治愈、低饱和、注重材质细节" oninput="planWizard.styleDesc=this.value">${esc(planWizard.styleDesc)}</textarea></div>
+    <div class="dropzone" onclick="document.getElementById('pwRef').click()">${ic('upload',30)}<div class="bold">上传参考图片（可选）</div><div class="small muted">原型仅模拟，不真实上传</div><input type="file" id="pwRef" accept="image/*" style="display:none" onchange="planWizard.refImg=this.files[0]?this.files[0].name:null;renderPlanWizard()"></div>
+    ${planWizard.refImg?'<div class="small mt">'+ic('image',14)+' 参考图：'+esc(planWizard.refImg)+'</div>':''}`;}
+  else if(planWizard.step===8){
+    const p=productById(planWizard.productId);
+    body=`<div class="alert success">${ic('checkCircle')}<span>请确认以下策划任务配置。</span></div>
+      <table class="tbl"><tbody>
+      <tr><th style="width:130px">商品</th><td class="bold">${p?esc(p.name):'—'}</td></tr>
+      <tr><th>商品版本</th><td>V${p?p.currentVersion:'—'}</td></tr>
+      <tr><th>营销场景</th><td>${esc(planWizard.scene||'—')}</td></tr>
+      <tr><th>营销渠道</th><td>${esc(planWizard.channel||'—')}</td></tr>
+      <tr><th>内容形式</th><td>${esc(planWizard.contentType||'—')}</td></tr>
+      <tr><th>目标人群</th><td>${esc(planWizard.audience||planWizard.customAudience||'—')}</td></tr>
+      <tr><th>营销目标</th><td>${esc(planWizard.goal||'—')}</td></tr>
+      <tr><th>风格</th><td>${esc(planWizard.style||'—')}${planWizard.styleDesc?' · '+esc(planWizard.styleDesc):''}</td></tr>
+      </tbody></table>`;
+  }
+  const canNext=planWizard.step===1?(!!planWizard.productId):planWizard.step===8?true:true;
+  openModal(`<div class="modal-h"><h3>创建策划任务</h3><button class="icon-btn" onclick="closeModal()">${ic('close')}</button></div>
+    <div class="stepper" style="padding:20px 22px 0">${steps.map((s,i)=>`<div class="step ${i+1<planWizard.step?'done':i+1===planWizard.step?'on':''}"><div class="dot">${i+1<planWizard.step?ic('check',13):(i+1)}</div><div class="txt" style="font-size:11px">${s}</div><div class="line"></div></div>`).join('')}</div>
+    <div class="modal-b">${body}</div>
+    <div class="modal-f">
+      ${planWizard.step>1?'<button class="btn btn-secondary" onclick="planWizard.step--;renderPlanWizard()">上一步</button>':''}
+      <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+      ${planWizard.step<8?'<button class="btn btn-primary" '+(canNext?'':'disabled')+' onclick="planWizard.step++;renderPlanWizard()">下一步</button>':'<button class="btn btn-primary" onclick="createPlan()">'+ic('check')+' 创建策划任务</button>'}
+    </div>`);
+}
+function createPlan(){
+  const p=productById(planWizard.productId);
+  const plan=generateMockPlan(p,planWizard);
+  DB.plans.unshift(plan);
+  saveDB();closeModal();toast('策划任务已创建，AI 开始理解商品…','success');
+  go('plans/'+plan.id+'/insight');
+}
+function generateMockPlan(p,w){
+  const attrs={};p.groups.forEach(g=>g.fields.forEach(f=>{if(!attrs[f[0]])attrs[f[0]]=f[1];}));
+  const mat=attrs['主体材质']||attrs['面料成分']||attrs['鞋面材质']||attrs['核心成分']||'材质';
+  const color=attrs['商品颜色']||'配色';
+  return {
+    id:uid('PL'),name:(p.name)+' · '+w.scene+' · '+w.channel,productId:p.id,productVersion:p.currentVersion,
+    scene:w.scene,channel:w.channel,contentType:w.contentType,people:w.audience||w.customAudience||'目标人群',goal:w.goal||'突出商品卖点',style:w.style||'自然生活',styleDesc:w.styleDesc,updatedAt:now(),
+    status:'understanding',stage:'正在理解商品',
+    insights:[
+      {point:mat,basis:'商品档案 · 材质字段',type:'fact'},
+      {point:color+'配色',basis:'商品档案 + 参考图',type:'fact'},
+      {point:'契合「'+w.scene+'」场景',basis:'营销场景分析',type:'derived'},
+      {point:'强化「'+w.goal+'」',basis:'营销目标推导',type:'derived'}
+    ],
+    strategy:{goal:'结合「'+w.scene+'」与真实使用场景，突出'+mat+'与'+color+'，达成「'+w.goal+'」。',audience:w.audience||w.customAudience||'目标人群',position:p.name+' · '+w.scene+'主打',core:[mat,color+'配色'],direction:w.style+'风格 + 真实场景 + 卖点放大',channel:w.channel+'适配建议',structure:'钩子 → 场景 → 细节 → 种草收尾'},
+    concepts:[
+      {id:uid('c'),name:'「'+w.scene+'主打」',position:w.scene+'场景',core:'围绕'+w.scene+'氛围，突出'+mat+'质感与'+color+'配色',style:w.style||'自然生活',mood:'氛围感场景',focus:'材质与配色',aud:'目标人群',reason:'贴合场景，情感共鸣强',selected:true},
+      {id:uid('c'),name:'「实用卖点」',position:'卖点导向',core:'以核心卖点与使用价值切入，强化转化',style:'自然生活',mood:'明亮实用',focus:'功能卖点',aud:'理性消费者',reason:'卖点清晰利于转化'}
+    ],
+    images:[
+      {id:uid('i'),no:1,use:'商品主视觉',theme:p.name+'主图',focus:'整体外观与配色',comp:'居中构图',scene:'纯色/场景背景',light:'柔光',color:w.style||'自然',ratio:'3:4',copy:p.name,gen:p.name+'主视觉，'+color+'，柔光，高级感'},
+      {id:uid('i'),no:2,use:'材质细节',theme:mat+'特写',focus:'材质纹理',comp:'微距特写',scene:'自然光',light:'侧逆光',color:'暖调',ratio:'1:1',copy:mat,gen:mat+'微距特写，纹理清晰'},
+      {id:uid('i'),no:3,use:'使用场景',theme:w.scene+'场景图',focus:'场景与上身/使用效果',comp:'中景',scene:w.scene,light:'自然光',color:'氛围感',ratio:'3:4',copy:w.scene+'场景',gen:w.scene+'场景中使用'+p.name}
+    ],
+    shots:[
+      {id:uid('s'),no:1,dur:2,scene:mat+'特写',scale:'特写',move:'固定',focus:mat,vo:'开场钩子，展现'+mat+'质感。',sub:'开场',trans:'叠化',color:p.color},
+      {id:uid('s'),no:2,dur:3,scene:w.scene+'场景',scale:'中景',move:'跟拍',focus:'使用场景',vo:'真实场景中展现'+color+'与使用效果。',sub:'场景',trans:'切',color:p.color},
+      {id:uid('s'),no:3,dur:2,scene:'卖点展示',scale:'近景',move:'推',focus:'核心卖点',vo:'聚焦核心卖点，强化'+w.goal+'。',sub:'卖点',trans:'切',color:p.color},
+      {id:uid('s'),no:4,dur:2,scene:'品牌收尾',scale:'中景',move:'拉',focus:'品牌形象',vo:'ProductFlow 客邻尚品。',sub:'收尾',trans:'淡出',color:p.color}
+    ],
+    versions:[]
+  };
+}
+
+/* ---- 商品理解与卖点分析 ---- */
+function pagePlanInsight(){
+  const plan=currentPlan();if(!plan)return emptyState('未选择策划任务','请从策划任务列表进入。',"go('plans/list')",'返回任务列表');
+  const p=productById(plan.productId);
+  return planStageNav(plan)+`
+  <div class="page-head"><div class="row"><div><div class="h1">商品理解与卖点分析</div><div class="desc">基于已确认商品档案与参考图，理解商品真实属性并提取可用于营销的卖点。事实与创意推导严格区分，禁止把 AI 推导当作已确认事实。</div></div>
+    <div class="actions"><button class="btn btn-soft" onclick="reAnalyze('${plan.id}')">${ic('refresh')}要求 AI 重新分析</button></div></div></div>
+  <div class="grid-2-1">
+    <div class="card"><div class="card-h"><h3>商品理解</h3></div>
+      <div class="card-b" style="display:flex;gap:16px">
+        <span class="thumb" style="width:110px;height:110px;background:linear-gradient(135deg,${p.color},${shade(p.color)})">${ic(p.icon,46)}</span>
+        <div style="flex:1">
+          <h3 style="font-size:17px">${esc(p.name)}</h3>
+          <div class="small muted mt" style="margin-top:6px">${esc(p.category)} · ${esc(p.brand)} · V${p.currentVersion}</div>
+          ${p.groups.map(g=>'<div class="small mt" style="margin-top:8px"><b>'+esc(g.title)+'：</b>'+g.fields.slice(0,4).map(f=>esc(f[0])+' '+esc(f[1])).join('，')+'</div>').join('')}
+        </div>
+      </div>
+    </div>
+    <div class="card"><div class="card-h"><h3>卖点类型说明</h3></div><div class="card-b">
+      <div class="av" style="padding:8px 0">${statusTag('fact','事实卖点')}<span class="small muted" style="margin-left:8px">有商品档案证据支持</span></div>
+      <div class="av" style="padding:8px 0">${statusTag('derived','创意推导')}<span class="small muted" style="margin-left:8px">基于特征做的营销推导</span></div>
+      <div class="av" style="padding:8px 0">${statusTag('unverified','待核实')}<span class="small muted" style="margin-left:8px">尚无证据支持，不可当作事实</span></div>
+    </div></div>
+  </div>
+  <div class="card mt">
+    <div class="card-h"><h3>AI 卖点分析</h3><span class="sub">${plan.insights.length} 个卖点</span>
+      <div class="actions"><button class="btn btn-soft btn-sm" onclick="addSellingPoint('${plan.id}')">${ic('plus')}补充卖点</button></div></div>
+    <div class="card-b">
+      ${plan.insights.map((s,i)=>`<div class="sp-card">
+        <div class="top">
+          <span class="grip">${ic('more')}</span>
+          <div style="flex:1"><h4>${esc(s.point)}</h4><div class="basis">依据：${esc(s.basis)}</div></div>
+          <span class="tag ${SP_TYPE[s.type][0]}">${SP_TYPE[s.type][1]}</span>
+        </div>
+        <div class="bottom">
+          <button class="btn btn-ghost btn-xs" ${i===0?'disabled':''} onclick="moveSellingPoint('${plan.id}',${i},-1)">${ic('up')}上移</button>
+          <button class="btn btn-ghost btn-xs" ${i===plan.insights.length-1?'disabled':''} onclick="moveSellingPoint('${plan.id}',${i},1)">${ic('down')}下移</button>
+          <span class="spacer" style="flex:1"></span>
+          <button class="btn btn-ghost btn-xs" onclick="deleteSellingPoint('${plan.id}',${i})">${ic('trash')}删除</button>
+        </div>
+      </div>`).join('')||'<div class="empty"><div class="art">'+ic('sparkle',30)+'</div><h4>暂无卖点</h4><p>点击「要求 AI 重新分析」或「补充卖点」。</p></div>'}
+    </div>
+  </div>`;
+}
+function reAnalyze(id){toast('AI 正在重新分析（模拟）…','info');setTimeout(()=>{toast('卖点已更新','success');},900);}
+function addSellingPoint(id){
+  openModal(`<div class="modal-h"><h3>补充卖点</h3><button class="icon-btn" onclick="closeModal()">${ic('close')}</button></div>
+    <div class="modal-b"><div class="field"><label>卖点内容</label><input class="input" id="spPoint" placeholder="输入卖点"></div>
+    <div class="field"><label>依据</label><input class="input" id="spBasis" placeholder="说明依据"></div>
+    <div class="field"><label>类型</label><select class="input" id="spType"><option value="fact">事实卖点</option><option value="derived">创意推导</option><option value="unverified">待核实</option></select></div></div>
+    <div class="modal-f"><button class="btn btn-secondary" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="saveSellingPoint('${id}')">添加</button></div>`);
+}
+function saveSellingPoint(id){
+  const plan=planById(id);const point=document.getElementById('spPoint').value.trim();if(!point){toast('请输入卖点','error');return;}
+  plan.insights.push({point,basis:document.getElementById('spBasis').value||'人工补充',type:document.getElementById('spType').value});
+  saveDB();closeModal();toast('卖点已添加','success');render();
+}
+function deleteSellingPoint(id,i){const p=planById(id);p.insights.splice(i,1);saveDB();render();}
+function moveSellingPoint(id,i,d){const p=planById(id);const j=i+d;if(j<0||j>=p.insights.length)return;const t=p.insights[i];p.insights[i]=p.insights[j];p.insights[j]=t;saveDB();render();}
+
+/* ---- 营销策略与创意方案 ---- */
+function pagePlanStrategy(){
+  const plan=currentPlan();if(!plan)return emptyState('未选择策划任务','请从策划任务列表进入。',"go('plans/list')",'返回任务列表');
+  if(!plan.strategy){return planStageNav(plan)+'<div class="empty"><div class="art">'+ic('target',30)+'</div><h4>尚未生成营销策略</h4><p>先完成商品理解与卖点分析。</p><div class="actions"><button class="btn btn-primary btn-sm" onclick="go(\'plans/'+plan.id+'/insight\')">返回商品理解</button></div></div>';}
+  const s=plan.strategy;
+  return planStageNav(plan)+`
+  <div class="page-head"><div class="row"><div><div class="h1">营销策略与创意方案</div><div class="desc">AI 根据用户需求、商品事实与渠道特征生成营销策略，并提供 2～3 个实质差异的创意方向。</div></div>
+    <div class="actions"><button class="btn btn-soft" onclick="toast('AI 正在重新生成（模拟）…','info')">${ic('refresh')}重新生成</button></div></div></div>
+  <div class="card mb"><div class="card-h"><h3>营销策略</h3></div><div class="card-b">
+    ${[['本次营销目标',s.goal],['目标用户关注点',s.audience],['商品内容定位',s.position],['核心卖点',(s.core||[]).join(' / ')],['营销表达方向',s.direction],['渠道适配建议',s.channel],['内容结构建议',s.structure]].map(x=>'<div class="av" style="display:flex;gap:16px;border-bottom:1px dashed var(--line-2);padding:10px 0"><span class="bold" style="min-width:130px;color:var(--text-2)">'+x[0]+'</span><span>'+esc(x[1])+'</span></div>').join('')}
+  </div></div>
+  <div class="card"><div class="card-h"><h3>创意方案</h3><span class="sub">${plan.concepts.length} 个方向</span></div><div class="card-b">
+    <div class="concepts">${plan.concepts.map(c=>`
+      <div class="concept ${c.selected?'selected':''}">
+        <div class="cv" style="background:linear-gradient(135deg,var(--brand),var(--brand-2))">${ic('sparkle',34)}</div>
+        <div class="cb"><h4>${esc(c.name)}</h4><div class="pos">${esc(c.position)}</div><p>${esc(c.core)}</p><div class="meta">${ic('palette',13)} ${esc(c.style)} · ${esc(c.mood)}<br>${ic('users',13)} ${esc(c.aud)}</div></div>
+        <div class="cf">
+          <button class="btn ${c.selected?'btn-primary':'btn-soft'} btn-sm" style="flex:1" onclick="selectConcept('${plan.id}','${c.id}')">${c.selected?ic('check')+'已选定':ic('check')+'设为正式方向'}</button>
+          <button class="btn btn-ghost btn-sm" onclick="editConcept('${plan.id}','${c.id}')">${ic('edit')}</button>
+        </div>
+      </div>`).join('')}</div>
+  </div></div>`;
+}
+function selectConcept(id,cid){const p=planById(id);p.concepts.forEach(c=>c.selected=c.id===cid);saveDB();render();toast('已设为正式策划方向','success');}
+function editConcept(id,cid){
+  const p=planById(id);const c=p.concepts.find(x=>x.id===cid);if(!c)return;
+  openModal(`<div class="modal-h"><h3>编辑创意方案</h3><button class="icon-btn" onclick="closeModal()">${ic('close')}</button></div>
+    <div class="modal-b"><div class="field"><label>创意名称</label><input class="input" id="ecName" value="${esc(c.name)}"></div>
+    <div class="field"><label>创意定位</label><input class="input" id="ecPos" value="${esc(c.position)}"></div>
+    <div class="field"><label>核心表达</label><textarea class="input" id="ecCore">${esc(c.core)}</textarea></div></div>
+    <div class="modal-f"><button class="btn btn-secondary" onclick="closeModal()">取消</button><button class="btn btn-primary" onclick="saveConcept('${id}','${cid}')">保存</button></div>`);
+}
+function saveConcept(id,cid){const p=planById(id);const c=p.concepts.find(x=>x.id===cid);c.name=document.getElementById('ecName').value;c.position=document.getElementById('ecPos').value;c.core=document.getElementById('ecCore').value;saveDB();closeModal();toast('创意方案已更新','success');render();}
+
+/* ---- 图片策划 ---- */
+function pagePlanImage(){
+  const plan=currentPlan();if(!plan)return emptyState('未选择策划任务','请从策划任务列表进入。',"go('plans/list')",'返回任务列表');
+  const p=productById(plan.productId);
+  return planStageNav(plan)+`
+  <div class="page-head"><div class="row"><div><div class="h1">图片策划</div><div class="desc">将营销策略转化为可执行的商品图片生产方案。每张图片独立编辑，不改动商品真实属性。</div></div>
+    <div class="actions"><button class="btn btn-primary" onclick="addImage('${plan.id}')">${ic('plus')}新增图片</button></div></div></div>
+  <div class="alert warn">${ic('alert')}<span>商品事实约束：颜色、结构、配件、材质、规格不可随意改变；AI 仅设计背景、构图、灯光与风格。</span></div>
+  <div class="imgplan-grid">${plan.images.map((im,i)=>`
+    <div class="imgcard">
+      <div class="iv" style="background:linear-gradient(135deg,${p.color},${shade(p.color)})"><span class="num">#${im.no}</span>${ic(p.icon,32)}</div>
+      <div class="ib"><h4>${esc(im.theme)}</h4><p>${esc(im.use)} · ${esc(im.focus)}</p>
+        <div class="spec"><span>${esc(im.comp)}</span><span>${esc(im.scene)}</span><span>${esc(im.light)}</span><span>${esc(im.ratio)}</span></div></div>
+      <div class="if">
+        <button class="btn btn-soft btn-sm" style="flex:1" onclick="editImage('${plan.id}','${im.id}')">${ic('edit')}编辑</button>
+        <button class="btn btn-ghost btn-sm" ${i===0?'disabled':''} onclick="moveImage('${plan.id}',${i},-1)">${ic('up')}</button>
+        <button class="btn btn-ghost btn-sm" ${i===plan.images.length-1?'disabled':''} onclick="moveImage('${plan.id}',${i},1)">${ic('down')}</button>
+        <button class="btn btn-ghost btn-sm" onclick="deleteImage('${plan.id}',${i})">${ic('trash')}</button>
+      </div>
+    </div>`).join('')||'<div class="empty" style="grid-column:1/-1"><div class="art">'+ic('image',30)+'</div><h4>暂无图片策划</h4><p>新增图片或重新生成。</p><div class="actions"><button class="btn btn-primary btn-sm" onclick="addImage(\''+plan.id+'\')">新增图片</button></div></div>'}</div>`;
+}
+function addImage(id){
+  const p=planById(id);const no=p.images.length+1;
+  p.images.push({id:uid('i'),no,use:'新图片',theme:'新图片主题',focus:'商品展示',comp:'居中构图',scene:'纯色背景',light:'柔光',color:'自然',ratio:'1:1',copy:'',gen:''});
+  saveDB();render();toast('已新增图片 #'+no,'success');
+}
+function editImage(id,iid){
+  const p=planById(id);const im=p.images.find(x=>x.id===iid);if(!im)return;
+  openModal(`<div class="modal-h"><h3>编辑图片 #${im.no}</h3><button class="icon-btn" onclick="closeModal()">${ic('close')}</button></div>
+    <div class="modal-b">
+      <div class="row"><div class="field"><label>图片用途</label><input class="input" id="eiUse" value="${esc(im.use)}"></div><div class="field"><label>图片主题</label><input class="input" id="eiTheme" value="${esc(im.theme)}"></div></div>
+      <div class="field"><label>商品展示重点</label><input class="input" id="eiFocus" value="${esc(im.focus)}"></div>
+      <div class="row"><div class="field"><label>画面构图</label><input class="input" id="eiComp" value="${esc(im.comp)}"></div><div class="field"><label>背景场景</label><input class="input" id="eiScene" value="${esc(im.scene)}"></div></div>
+      <div class="row"><div class="field"><label>光线设计</label><input class="input" id="eiLight" value="${esc(im.light)}"></div><div class="field"><label>色彩风格</label><input class="input" id="eiColor" value="${esc(im.color)}"></div></div>
+      <div class="row"><div class="field"><label>画面比例</label><input class="input" id="eiRatio" value="${esc(im.ratio)}"></div><div class="field"><label>文案建议</label><input class="input" id="eiCopy" value="${esc(im.copy)}"></div></div>
+      <div class="field"><label>图片生成描述</label><textarea class="input" id="eiGen">${esc(im.gen)}</textarea></div>
+    </div>
+    <div class="modal-f"><button class="btn btn-ghost" onclick="regenImage('${id}','${iid}')">${ic('refresh')}重新生成</button><button class="btn btn-primary" onclick="saveImage('${id}','${iid}')">保存</button></div>`);
+}
+function saveImage(id,iid){
+  const p=planById(id);const im=p.images.find(x=>x.id===iid);
+  ['use','theme','focus','comp','scene','light','color','ratio','copy','gen'].forEach(k=>{const v=document.getElementById('ei'+k.charAt(0).toUpperCase()+k.slice(1));if(v)im[k]=v.value;});
+  saveDB();closeModal();toast('图片策划已更新','success');render();
+}
+function regenImage(id,iid){toast('正在重新生成该图片策划（模拟）…','info');}
+function deleteImage(id,i){const p=planById(id);p.images.splice(i,1);p.images.forEach((im,j)=>im.no=j+1);saveDB();render();}
+function moveImage(id,i,d){const p=planById(id);const j=i+d;if(j<0||j>=p.images.length)return;const t=p.images[i];p.images[i]=p.images[j];p.images[j]=t;p.images.forEach((im,k)=>im.no=k+1);saveDB();render();}
+
+/* ---- 视频脚本与分镜 ---- */
+function pagePlanVideo(){
+  const plan=currentPlan();if(!plan)return emptyState('未选择策划任务','请从策划任务列表进入。',"go('plans/list')",'返回任务列表');
+  const total=(plan.shots||[]).reduce((s,x)=>s+x.dur,0);
+  return planStageNav(plan)+`
+  <div class="page-head"><div class="row"><div><div class="h1">视频脚本与分镜</div><div class="desc">根据商品与营销策略生成可执行的视频内容方案。每个镜头独立编辑，镜头时长与总时长保持一致。</div></div>
+    <div class="actions"><button class="btn btn-primary" onclick="addShot('${plan.id}')">${ic('plus')}新增镜头</button></div></div></div>
+  <div class="video-meta">
+    <div class="vm"><div class="l">视频主题</div><div class="v">${esc(plan.name)}</div></div>
+    <div class="vm"><div class="l">视频时长</div><div class="v">${total}s</div></div>
+    <div class="vm"><div class="l">视频比例</div><div class="v">9:16</div></div>
+    <div class="vm"><div class="l">视频渠道</div><div class="v">${esc(plan.channel||'—')}</div></div>
+    <div class="vm"><div class="l">视频风格</div><div class="v">${esc(plan.style||'—')}</div></div>
+  </div>
+  ${plan.shots.length?`<div class="timeline">${plan.shots.map(s=>{const pct=(s.dur/total*100).toFixed(1);return '<div class="seg" style="width:'+pct+'%;background:'+s.color+'" title="#'+s.no+' '+s.scene+' · '+s.dur+'s">#'+s.no+'</div>';}).join('')}</div>`:''}
+  <div class="card"><div class="card-h"><h3>分镜列表</h3><span class="sub">${plan.shots.length} 个镜头 · 总时长 ${total}s</span></div><div class="card-b">
+    ${plan.shots.map((s,i)=>`
+    <div class="shot">
+      <div class="shot-h"><span class="idx">${s.no}</span><span class="dur">${s.dur}s</span><b>${esc(s.scene)}</b><span class="spacer"></span>
+        <button class="btn btn-ghost btn-xs" ${i===0?'disabled':''} onclick="moveShot('${plan.id}',${i},-1)">${ic('up')}</button>
+        <button class="btn btn-ghost btn-xs" ${i===plan.shots.length-1?'disabled':''} onclick="moveShot('${plan.id}',${i},1)">${ic('down')}</button>
+        <button class="btn btn-soft btn-xs" onclick="editShot('${plan.id}','${s.id}')">${ic('edit')}编辑</button>
+        <button class="btn btn-ghost btn-xs" onclick="deleteShot('${plan.id}',${i})">${ic('trash')}</button>
+      </div>
+      <div class="shot-b">
+        <div class="col">
+          <div class="kv"><b>画面内容</b>${esc(s.scene)}</div>
+          <div class="kv"><b>景别 / 运镜</b>${esc(s.scale)} · ${esc(s.move)}</div>
+          <div class="kv"><b>商品展示重点</b>${esc(s.focus)}</div>
+        </div>
+        <div class="col">
+          <div class="kv"><b>旁白</b>${esc(s.vo)}</div>
+          <div class="kv"><b>字幕</b>${esc(s.sub)}</div>
+          <div class="kv"><b>转场</b>${esc(s.trans)}</div>
+        </div>
+      </div>
+    </div>`).join('')||'<div class="empty"><div class="art">'+ic('video',30)+'</div><h4>暂无分镜</h4><p>新增镜头以构建视频脚本。</p><div class="actions"><button class="btn btn-primary btn-sm" onclick="addShot(\''+plan.id+'\')">新增镜头</button></div></div>'}
+  </div></div>`;
+}
+function addShot(id){const p=planById(id);const no=p.shots.length+1;p.shots.push({id:uid('s'),no,dur:2,scene:'新镜头',scale:'中景',move:'固定',focus:'商品展示',vo:'旁白内容',sub:'字幕',trans:'切',color:'#5a5fd6'});saveDB();render();toast('已新增镜头 #'+no,'success');}
+function editShot(id,sid){
+  const p=planById(id);const s=p.shots.find(x=>x.id===sid);if(!s)return;
+  openModal(`<div class="modal-h"><h3>编辑镜头 #${s.no}</h3><button class="icon-btn" onclick="closeModal()">${ic('close')}</button></div>
+    <div class="modal-b">
+      <div class="row"><div class="field"><label>镜头时长（秒）</label><input class="input" type="number" id="esDur" value="${s.dur}" min="1" max="60"></div><div class="field"><label>画面内容</label><input class="input" id="esScene" value="${esc(s.scene)}"></div></div>
+      <div class="row"><div class="field"><label>景别</label><select class="input" id="esScale"><option>特写</option><option>近景</option><option>中景</option><option>全景</option></select></div><div class="field"><label>运镜方式</label><select class="input" id="esMove"><option>推</option><option>拉</option><option>摇</option><option>移</option><option>固定</option></select></div></div>
+      <div class="field"><label>商品展示重点</label><input class="input" id="esFocus" value="${esc(s.focus)}"></div>
+      <div class="field"><label>旁白</label><textarea class="input" id="esVo">${esc(s.vo)}</textarea></div>
+      <div class="row"><div class="field"><label>字幕</label><input class="input" id="esSub" value="${esc(s.sub)}"></div><div class="field"><label>转场</label><input class="input" id="esTrans" value="${esc(s.trans)}"></div></div>
+    </div>
+    <div class="modal-f"><button class="btn btn-ghost" onclick="toast('正在重新生成该镜头（模拟）…','info')">${ic('refresh')}重新生成</button><button class="btn btn-primary" onclick="saveShot('${id}','${sid}')">保存</button></div>`);
+  document.getElementById('esScale').value=s.scale;document.getElementById('esMove').value=s.move;
+}
+function saveShot(id,sid){
+  const p=planById(id);const s=p.shots.find(x=>x.id===sid);
+  s.dur=parseInt(document.getElementById('esDur').value)||2;
+  s.scene=document.getElementById('esScene').value;s.scale=document.getElementById('esScale').value;s.move=document.getElementById('esMove').value;
+  s.focus=document.getElementById('esFocus').value;s.vo=document.getElementById('esVo').value;s.sub=document.getElementById('esSub').value;s.trans=document.getElementById('esTrans').value;
+  saveDB();closeModal();toast('镜头已更新','success');render();
+}
+function deleteShot(id,i){const p=planById(id);p.shots.splice(i,1);p.shots.forEach((s,j)=>s.no=j+1);saveDB();render();}
+function moveShot(id,i,d){const p=planById(id);const j=i+d;if(j<0||j>=p.shots.length)return;const t=p.shots[i];p.shots[i]=p.shots[j];p.shots[j]=t;p.shots.forEach((s,k)=>s.no=k+1);saveDB();render();}
+
+/* ---- 策划审核与版本管理 ---- */
+function pagePlanReview(){
+  const plan=currentPlan();if(!plan)return emptyState('未选择策划任务','请从策划任务列表进入。',"go('plans/list')",'返回任务列表');
+  const p=productById(plan.productId);
+  const linkage=versionLinkage(plan);
+  return planStageNav(plan)+`
+  <div class="page-head"><div class="row"><div><div class="h1">策划审核与版本管理</div><div class="desc">对最终策划方案进行审核、确认与版本管理。商品档案版本变化时联动提示，不自动覆盖已确认策划。</div></div>
+    <div class="actions"><button class="btn btn-ghost" onclick="demoVersionBump('${plan.productId}')">${ic('workflow')}模拟商品升级</button><button class="btn btn-secondary" onclick="exportPlan('${plan.id}')">${ic('download')}导出</button><button class="btn btn-primary" onclick="confirmPlan('${plan.id}')">${ic('check')}确认策划</button></div></div></div>
+  ${linkage?`<div class="alert warn">${ic('alert')}<div><b>商品档案已升级：V${linkage.ref} → V${linkage.cur}</b><br><span>该策划引用了商品档案 V${linkage.ref}，以下字段已变化，可能需要重新审核：</span><br>${linkage.changedFields.map(c=>'<span class="tag orange" style="margin:2px 2px 0 0">'+esc(c.f)+'：'+esc(c.after)+'</span>').join('')}</div><div><button class="btn btn-soft btn-sm" onclick="updatePlanProductVersion('${plan.id}')">${ic('refresh')}更新策划并生成新版本</button></div></div>`:''}
+  <div class="grid-2-1">
+    <div class="card"><div class="card-h"><h3>策划内容摘要</h3><span class="sub">引用商品档案 V${plan.productVersion}</span></div><div class="card-b">
+      ${[['商品信息版本','V'+plan.productVersion],['营销场景',plan.scene],['营销策略',plan.strategy?(plan.strategy.direction||plan.strategy.goal):'—'],['创意方案',plan.concepts.filter(c=>c.selected).map(c=>c.name).join('、')||plan.concepts[0]?.name||'—'],['图片策划',plan.images.length+' 张'],['视频分镜',plan.shots.length+' 个镜头 · '+(plan.shots||[]).reduce((s,x)=>s+x.dur,0)+'s'],['商品事实引用',plan.insights.filter(s=>s.type==='fact').length+' 个事实卖点']].map(x=>'<div class="av" style="display:flex;gap:14px;border-bottom:1px dashed var(--line-2);padding:9px 0"><span class="bold" style="min-width:110px;color:var(--text-2)">'+x[0]+'</span><span>'+esc(x[1])+'</span></div>').join('')}
+    </div></div>
+    <div class="card"><div class="card-h"><h3>待审核检查</h3></div><div class="card-b">
+      ${[['事实卖点均有档案依据',plan.insights.filter(s=>s.type==='fact').length>0],['无无依据宣传词','通过'],['图片遵守商品事实约束','通过'],['视频镜头时长一致',true],['引用商品档案版本',true]].map(x=>'<div class="av" style="display:flex;justify-content:space-between;border-bottom:1px dashed var(--line-2);padding:9px 0"><span>'+x[0]+'</span>'+ic('checkCircle',16)+'</div>').join('')}
+    </div></div>
+  </div>
+  <div class="card mt"><div class="card-h"><h3>策划版本</h3><span class="sub">${plan.versions.length} 个版本</span></div><div class="card-b" style="padding-top:0">
+    ${plan.versions.length?plan.versions.slice().reverse().map(v=>`<div class="file" style="margin-top:12px"><span class="fic">${ic('archive')}</span><div class="meta"><b>V${v.v} · ${esc(v.note)}</b><span>${fmtTime(v.time)} · ${esc(v.by)} · 商品档案 V${v.productVersion} · ${esc(v.changes)}</span></div>${statusTag(v.status==='已确认'?'confirmed':v.status==='待审核'?'pending':'draft',v.status)}</div>`).join(''):'<div class="small muted" style="padding:12px 0">暂无版本，确认策划后生成首个版本。</div>'}
+  </div></div>`;
+}
+function versionLinkage(plan){
+  const p=productById(plan.productId);if(!p)return null;
+  const ref=plan.productVersion||1;const cur=p.currentVersion;
+  if(cur<=ref)return null;
+  const changedFields=[];
+  p.versions.filter(v=>v.v>ref).forEach(v=>v.changes.forEach(c=>{if(c.f!=='数据状态'&&c.f!=='商品名称')changedFields.push(c);}));
+  return {ref,cur,changedFields:changedFields.slice(0,8)};
+}
+function demoVersionBump(productId){
+  const p=productById(productId);if(!p)return;
+  p.currentVersion+=1;
+  const v=p.currentVersion;
+  p.status='confirmed';p.statusNote='已确认';
+  p.versions.push({v,time:now(),by:'供应商更新（演示）',note:'演示：商品颜色与包装变更',status:'已发布',changes:[{f:'商品颜色',before:'暖米白',after:'暖米白 / 燕麦色',reason:'演示联动'},{f:'包装规格',before:'单个独立防尘袋',after:'礼盒装 + 防尘袋',reason:'演示联动'}]});
+  saveDB();toast('商品档案已升级到 V'+v+'（演示版本联动）','success');render();
+}
+function updatePlanProductVersion(id){
+  const plan=planById(id);const p=productById(plan.productId);
+  const old=plan.productVersion;
+  plan.productVersion=p.currentVersion;
+  plan.versions.push({v:plan.versions.length+1,time:now(),by:'林运营',productVersion:p.currentVersion,note:'商品档案升级联动更新',changes:'更新引用商品版本 V'+old+' → V'+p.currentVersion,status:'待审核'});
+  plan.status='review';plan.stage='待人工审核';plan.updatedAt=now();
+  saveDB();toast('已更新策划并生成新版本','success');render();
+}
+function confirmPlan(id){
+  const plan=planById(id);
+  if(versionLinkage(plan)){toast('存在商品档案版本变化，请先更新策划','error');return;}
+  const v=plan.versions.length+1;
+  plan.status='confirmed';plan.stage='已确认';
+  plan.versions.push({v,time:now(),by:'林运营',productVersion:plan.productVersion,note:'确认策划',changes:'人工确认发布',status:'已确认'});
+  saveDB();toast('策划已确认，生成版本 V'+v,'success');render();
+}
+function exportPlan(id){
+  const plan=planById(id);
+  const blob=new Blob([JSON.stringify(plan,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=plan.id+'-策划导出.json';a.click();URL.revokeObjectURL(a.href);
+  toast('已导出策划（模拟 JSON）','success');
+}
+
+/* ================= 空状态 ================= */
+function emptyState(title,desc,on,btnText){
+  return `<div class="empty" style="padding:80px 20px"><div class="art">${ic('box',30)}</div><h4>${esc(title)}</h4><p>${esc(desc)}</p><div class="actions"><button class="btn btn-primary" onclick="${on}">${btnText||'返回'}</button></div></div>`;
+}
+
+window.addEventListener('hashchange',render);
+render();
+</script>
+</body>
+</html>
