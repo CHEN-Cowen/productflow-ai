@@ -224,3 +224,27 @@ def test_confirm_image_requires_angle(client):
     response = client.put(f"/api/v1/products/ASSET05/sources/{image['id']}", json={"review_status": "confirmed"})
     assert response.status_code == 422
     assert error_code(response) == "angle_required_for_confirm"
+
+
+def test_delete_source_with_reference_guard(client, mock_llm):
+    from tests.helpers import make_png
+
+    # 未被引用的素材可以删除
+    client.post("/api/v1/products", json={"id": "DEL01", "name": "删除素材测试"})
+    image = upload(client, "DEL01", "可删除.png", make_png((10, 10, 10)))
+    deleted = client.delete(f"/api/v1/products/DEL01/sources/{image['id']}")
+    assert deleted.status_code == 200
+    assert deleted.json()["deleted"] is True
+    assert client.get("/api/v1/products/DEL01").json()["sources"] == []
+
+    # 已作为版本事实来源的素材不可删除
+    client.post("/api/v1/products", json={"id": "DEL02", "name": "引用保护测试"})
+    spec = upload(client, "DEL02", "规格.pdf", make_pdf(LINES))
+    mock_llm["state"]["result"] = {"items": ITEMS}
+    detail = client.post("/api/v1/products/DEL02/imports/extract", json={
+        "category_id": "BAG", "source_ids": [spec["id"]],
+    }).json()
+    confirm_fields(client, detail["id"], FIELDS)
+    blocked = client.delete(f"/api/v1/products/DEL02/sources/{spec['id']}")
+    assert blocked.status_code == 409
+    assert error_code(blocked) == "source_in_use"

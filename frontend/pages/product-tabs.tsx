@@ -436,14 +436,14 @@ export function AssetsTab({ detail, productId, reload }: TabProps) {
       </Section>
       {other.length > 0 && <Section title={"待整理与已停用（" + other.length + "）"}>{gallery(other)}</Section>}
       {editing && <Modal title="编辑参考素材" onClose={() => setEditingId("")}>
-        <AssetCard key={editing.id} source={editing} productId={productId} skus={detail.skus || []} reload={reload} />
+        <AssetCard key={editing.id} source={editing} productId={productId} skus={detail.skus || []} reload={reload} onDeleted={() => setEditingId("")} />
       </Modal>}
       <ImageUpload productId={productId} skus={detail.skus || []} reload={reload} />
     </>
   );
 }
 
-function AssetCard({ source, productId, skus, reload }: { source: any; productId: string; skus: any[]; reload: () => Promise<void> }) {
+function AssetCard({ source, productId, skus, reload, onDeleted }: { source: any; productId: string; skus: any[]; reload: () => Promise<void>; onDeleted?: () => void }) {
   const [angle, setAngle] = useState(source.view_angle || "");
   const [purpose, setPurpose] = useState(source.purpose || "reference");
   const [reviewStatus, setReviewStatus] = useState(source.review_status || "pending");
@@ -483,6 +483,22 @@ function AssetCard({ source, productId, skus, reload }: { source: any; productId
       } else {
         setMessage(result.note);
       }
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function remove() {
+    if (!window.confirm(`确认删除素材「${source.name}」？此操作不可撤销。`)) return;
+    setBusy("delete");
+    setError(null);
+    setMessage("");
+    try {
+      await api.delete(`/products/${productId}/sources/${source.id}`);
+      await reload();
+      onDeleted?.();
     } catch (err) {
       setError(err);
     } finally {
@@ -539,6 +555,7 @@ function AssetCard({ source, productId, skus, reload }: { source: any; productId
         <button className="btn btn-small" disabled={!!busy} onClick={save}>{busy === "save" ? "保存中…" : "保存标注"}</button>
         <button className="btn btn-small btn-ghost" disabled={!!busy} onClick={suggest}>{busy === "suggest" ? "建议中…" : "AI 建议视角"}</button>
         <a className="btn btn-small btn-ghost" href={source.url} target="_blank" rel="noreferrer">预览原图</a>
+        <button className="btn btn-small btn-soft" disabled={!!busy} onClick={remove}>{busy === "delete" ? "删除中…" : "删除"}</button>
       </div>
     </div>
   );

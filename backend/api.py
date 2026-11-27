@@ -309,6 +309,11 @@ def update_source(product_id: str, source_id: str, body: SourcePatch) -> dict[st
     return catalog.update_source(product_id, source_id, payload)
 
 
+@router.delete("/products/{product_id}/sources/{source_id}")
+def delete_source(product_id: str, source_id: str) -> dict[str, Any]:
+    return catalog.delete_source(product_id, source_id)
+
+
 @router.post("/products/{product_id}/sources/{source_id}/suggest-angle")
 def suggest_angle(product_id: str, source_id: str) -> dict[str, Any]:
     source = catalog.get_source(product_id, source_id)

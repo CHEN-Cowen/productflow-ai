@@ -594,6 +594,31 @@ def update_source(product_id: str, source_id: str, payload: dict[str, Any]) -> d
         return _source(one(db, "SELECT * FROM sources WHERE id=?", (source_id,)))
 
 
+def delete_source(product_id: str, source_id: str) -> dict[str, Any]:
+    with session() as db:
+        tenants.require_product_access(db, product_id)
+        row = one(db, "SELECT * FROM sources WHERE tenant_id=? AND id=? AND product_id=?",
+                  (tenants.current(), source_id, product_id))
+        if row is None:
+            raise not_found("找不到该资料，或资料不属于该商品")
+        version_ref = one(db, "SELECT COUNT(*) AS n FROM product_versions WHERE product_id=? AND provenance_json LIKE ?",
+                          (product_id, f"%{source_id}%"))
+        if version_ref and version_ref["n"]:
+            raise conflict("该资料已作为商品事实来源写入不可变版本，不可删除", code="source_in_use")
+        plan_ref = one(db, "SELECT COUNT(*) AS n FROM plans WHERE product_id=? AND source_ids LIKE ?",
+                       (product_id, f"%{source_id}%"))
+        if plan_ref and plan_ref["n"]:
+            raise conflict("该资料已被内容策划引用，请先删除或改用策划后再删除", code="source_in_use")
+        db.execute("DELETE FROM sources WHERE id=? AND product_id=?", (source_id, product_id))
+    path = next(iter(config.uploads_dir().glob(source_id + ".*")), None)
+    if path is None:
+        legacy = config.uploads_dir() / source_id
+        path = legacy if legacy.is_file() else None
+    if path is not None:
+        path.unlink(missing_ok=True)
+    return {"deleted": True, "id": source_id}
+
+
 ANGLE_KEYWORDS = [
     ("front", ("正面", "前面", "front")),
     ("back", ("背面", "后面", "反面", "back")),
