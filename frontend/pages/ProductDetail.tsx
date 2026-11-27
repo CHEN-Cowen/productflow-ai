@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, formatSize, formatTime, statusLabel } from "../api";
+import { api, formatTime, statusLabel } from "../api";
 import { Badge, Empty, ErrorBox, Field, Loading, Notice, Section, statusTone } from "../ui";
 import { RunSteps } from "../components";
 import { locatorText } from "../product-utils";
@@ -7,12 +7,12 @@ import { AssetsTab, DocsTab, PlansTab, ProductionTab, QualityTab, type TabProps 
 import { navigate, productPath } from "../router";
 
 const TABS = [
-  { key: "overview", label: "概览与事实" },
-  { key: "docs", label: "资料与导入" },
-  { key: "assets", label: "素材" },
+  { key: "overview", label: "商品信息" },
+  { key: "docs", label: "整理与更新资料" },
+  { key: "assets", label: "参考素材" },
   { key: "plans", label: "策划" },
-  { key: "production", label: "生产" },
-  { key: "quality", label: "质量审核" },
+  { key: "production", label: "内容制作" },
+  { key: "quality", label: "内容成品" },
   { key: "versions", label: "版本与影响" },
 ];
 
@@ -71,10 +71,10 @@ export default function ProductDetail({ productId, tab, embedded = false, produc
           <div className="crumbs"><a href="#/products">商品库</a> / {detail.product.id}</div>
           <h1>{detail.product.name}</h1>
           <div className="row gap wrap mt">
-            <Badge tone="accent">{detail.category.name} v{detail.category.version}</Badge>
+            <Badge tone="accent">{detail.category.name}</Badge>
             <Badge tone={statusTone(detail.product.status)}>{detail.product.status === "confirmed" ? "已确认" : "草稿"}</Badge>
             {detail.latest_version ? (
-              <Badge tone="success">当前版本 v{detail.latest_version.version}</Badge>
+              <Badge tone="success">当前生效资料 v{detail.latest_version.version}</Badge>
             ) : (
               <Badge tone="warn">尚无确认版本</Badge>
             )}
@@ -83,17 +83,9 @@ export default function ProductDetail({ productId, tab, embedded = false, produc
           </div>
         </div>
         <div className="toolbar">
-          <button className="btn btn-small btn-ghost" onClick={() => goTab("docs")}>上传资料</button>
-          <button className="btn btn-small btn-ghost" onClick={() => goTab("plans")}>内容策划</button>
-          <button className="btn btn-small btn-ghost" onClick={() => goTab("quality")}>审核成品</button>
+          <button className="btn btn-ghost" onClick={() => goTab("docs")}>{detail.latest_version ? "更新商品资料" : "整理商品资料"}</button>
+          <button className="btn" onClick={() => goTab(plans.some((plan) => plan.status === "confirmed" && plan.is_current_version) ? "production" : "plans")}>制作商品内容</button>
         </div>
-      </div>}
-
-      {!embedded && <div className="grid four">
-        <div className="stat"><div className="stat-label">资料</div><div className="stat-value">{detail.counts.sources}</div><div className="muted small">{detail.sources.filter((item: any) => item.kind === "image").length} 图 · {detail.sources.filter((item: any) => item.kind === "document").length} 文档</div></div>
-        <div className="stat"><div className="stat-label">必填完整度</div><div className="stat-value">{detail.completeness.required_filled}/{detail.completeness.required_total}</div><div className="muted small">{detail.completeness.missing.length ? `待补：${detail.completeness.missing.join("、")}` : "已齐全"}</div></div>
-        <div className="stat"><div className="stat-label">策划</div><div className="stat-value">{detail.counts.plans}</div><div className="muted small">已确认 {plans.filter((plan) => plan.status === "confirmed").length}</div></div>
-        <div className="stat"><div className="stat-label">成品 / 待审核</div><div className="stat-value">{detail.counts.outputs}</div><div className="muted small">{detail.counts.pending_reviews} 个待审核</div></div>
       </div>}
 
       {!embedded && <div className="tabs mt">
@@ -113,7 +105,7 @@ export default function ProductDetail({ productId, tab, embedded = false, produc
   );
 }
 
-function OverviewTab({ productId, detail, runs, reload }: TabProps) {
+function OverviewTab({ productId, detail, runs, reload, goTab }: TabProps) {
   const [form, setForm] = useState({
     name: detail.product.name, category_id: detail.product.category_id,
     brand: detail.product.brand, origin: detail.product.origin,
@@ -216,25 +208,14 @@ function OverviewTab({ productId, detail, runs, reload }: TabProps) {
 
   return (
     <>
-      <Section title="商品基础信息" subtitle="基础信息变更记录在审核日志中；品类字段事实以不可变版本为准">
-        <div className="form-grid">
-          <Field label="商品名称" required><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Field>
-          <Field label="品类模板"><select value={form.category_id} onChange={(event) => setForm({ ...form, category_id: event.target.value })}>
-            <option value={detail.category.id}>{detail.category.name}</option>
-          </select></Field>
-          <Field label="品牌"><input value={form.brand} onChange={(event) => setForm({ ...form, brand: event.target.value })} /></Field>
-          <Field label="型号"><input value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} /></Field>
-          <Field label="产地"><input value={form.origin} onChange={(event) => setForm({ ...form, origin: event.target.value })} /></Field>
-          <Field label="备注"><input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></Field>
-        </div>
-        {error !== null && <div className="mt"><ErrorBox error={error} /></div>}
-        {message && <div className="notice notice-success mt">{message}</div>}
-        <div className="form-actions"><button className="btn" disabled={!!busy} onClick={save}>{busy === "save" ? "保存中…" : "保存基础信息"}</button></div>
-      </Section>
-
-      <Section title="已确认商品事实" subtitle="每条事实保留标准值、来源文件、定位与原文；候选值不会直接进入发布内容">
+      <div className="record-links">
+        <button className="btn btn-ghost" onClick={() => goTab("docs")}>整理资料与核对字段</button>
+        <button className="btn btn-ghost" onClick={() => goTab("assets")}>查看参考素材</button>
+        <button className="btn btn-ghost" onClick={() => goTab("quality")}>查看内容成品（{detail.counts.outputs}）</button>
+      </div>
+      <Section title="当前生效的商品事实" subtitle="每条事实保留标准值、来源文件、定位与原文；候选值不会直接进入发布内容">
         {!detail.latest_version ? (
-          <Notice tone="warn">还没有已确认版本。请到“资料与导入”上传资料并完成人工确认。</Notice>
+          <Notice tone="warn">还没有已确认版本。请到“整理与更新资料”上传资料并完成人工确认。</Notice>
         ) : (
           <>
             <div className="muted small mb">
@@ -254,7 +235,10 @@ function OverviewTab({ productId, detail, runs, reload }: TabProps) {
                         {proof ? (
                           proof.method === "manual"
                             ? <>人工补充 · 依据：{proof.basis || "—"}</>
-                            : <>{proof.source_name} · {locatorText(proof.locator)}</>
+                            : <>{(() => {
+                                const source = detail.sources.find((item: any) => item.id === proof.source_id);
+                                return source ? <a href={source.url} target="_blank" rel="noreferrer">{proof.source_name}</a> : proof.source_name;
+                              })()} · {locatorText(proof.locator)}</>
                         ) : <span className="muted">—</span>}
                       </td>
                       <td className="quote small">{proof?.quote || "—"}</td>
@@ -268,7 +252,24 @@ function OverviewTab({ productId, detail, runs, reload }: TabProps) {
         )}
       </Section>
 
-      <Section title={`SKU（${detail.skus.length}）`} subtitle="同一商品可管理多个 SKU，规格可与素材关联；修改单个 SKU 不会影响其他 SKU">
+      <details className="record-details"><summary>维护商品基础信息与 SKU</summary>
+      <Section title="商品基础信息" subtitle="基础信息变更记录在审核日志中；品类字段事实以不可变版本为准">
+        <div className="form-grid">
+          <Field label="商品名称" required><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></Field>
+          <Field label="品类模板"><select value={form.category_id} onChange={(event) => setForm({ ...form, category_id: event.target.value })}>
+            <option value={detail.category.id}>{detail.category.name}</option>
+          </select></Field>
+          <Field label="品牌"><input value={form.brand} onChange={(event) => setForm({ ...form, brand: event.target.value })} /></Field>
+          <Field label="型号"><input value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} /></Field>
+          <Field label="产地"><input value={form.origin} onChange={(event) => setForm({ ...form, origin: event.target.value })} /></Field>
+          <Field label="备注"><input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></Field>
+        </div>
+        {error !== null && <div className="mt"><ErrorBox error={error} /></div>}
+        {message && <div className="notice notice-success mt">{message}</div>}
+        <div className="form-actions"><button className="btn" disabled={!!busy} onClick={save}>{busy === "save" ? "保存中…" : "保存基础信息"}</button></div>
+      </Section>
+
+      <Section title={`已登记 SKU（${detail.skus.length}）`} subtitle="同一商品可管理多个 SKU，规格可与素材关联；修改单个 SKU 不会影响其他 SKU">
         {detail.skus.length > 0 && (
           <table>
             <thead><tr><th>SKU 编码</th><th>规格</th><th>创建时间</th><th>操作</th></tr></thead>
@@ -307,6 +308,7 @@ function OverviewTab({ productId, detail, runs, reload }: TabProps) {
         </div>
       </Section>
 
+      </details>
       <Section title="版本影响" subtitle="商品事实更新后，按实际引用字段与版本定位受影响成品">
         {!impact || !impact.changed_fields?.length ? (
           <div className="muted small">暂无版本差异{impact?.note ? `。${impact.note}` : ""}</div>
@@ -323,9 +325,9 @@ function OverviewTab({ productId, detail, runs, reload }: TabProps) {
         )}
       </Section>
 
-      <Section title="最近任务" subtitle="导入、策划与生产执行记录">
+      <details className="record-details"><summary>最近执行记录</summary>
         {runs.length === 0 ? <Empty title="暂无任务" /> : runs.slice(0, 5).map((run: any) => <RunSteps key={run.id} run={run} />)}
-      </Section>
+      </details>
     </>
   );
 }

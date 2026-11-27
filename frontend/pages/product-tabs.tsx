@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ANGLES, ASSET_TYPES, PURPOSES, angleLabel, api, formatSize, formatTime, statusLabel } from "../api";
-import { Badge, Empty, ErrorBox, Field, Loading, Notice, Section, statusTone } from "../ui";
+import { Badge, Empty, ErrorBox, Field, Loading, Modal, Notice, Section, statusTone } from "../ui";
 import { OutputCard, RunSteps } from "../components";
 import { fieldLabels, locatorText, planTemplate } from "../product-utils";
 import { navigate, productPath } from "../router";
@@ -37,7 +37,7 @@ export function DocsTab(props: TabProps) {
   const [activeLoading, setActiveLoading] = useState(false);
 
   const sourceIdsKey = docs.map((item: any) => item.id).join(",");
-  useEffect(() => { setSelected(docs.map((item: any) => item.id)); }, [sourceIdsKey]);
+  useEffect(() => { setSelected(docs.slice(0, 1).map((item: any) => item.id)); }, [sourceIdsKey]);
 
   async function openImport(importId: string) {
     setActiveId(importId);
@@ -103,7 +103,12 @@ export function DocsTab(props: TabProps) {
 
   return (
     <>
-      <Section title="上传原始资料" subtitle="支持带文字层 PDF、XLSX、DOCX、PNG/JPEG；单文件不超过 10 MB，服务端校验类型与体积">
+      <div className="record-links">
+        <Badge tone="accent">{detail.latest_version ? '基于当前资料 v' + detail.latest_version.version : "首次整理资料"}</Badge>
+        <span>上传原件 → 核对字段 → 确认生效</span>
+        <button className="btn btn-small btn-ghost" onClick={() => props.goTab("versions")}>查看版本与影响</button>
+      </div>
+      <Section title="1. 上传原始资料" subtitle="支持带文字层 PDF、XLSX、DOCX、PNG/JPEG；单文件不超过 10 MB，服务端校验类型与体积">
         <div className="form-grid">
           <Field label="选择文件" required hint="旧版 .doc/.xls 请先另存为 .docx/.xlsx">
             <input type="file" accept=".pdf,.xlsx,.docx,.png,.jpg,.jpeg"
@@ -158,7 +163,7 @@ export function DocsTab(props: TabProps) {
         )}
       </Section>
 
-      <Section title="字段抽取与规则校验" subtitle="模型只生成候选；服务端会核对引用原文能否定位，无法定位的值直接拒绝">
+      <Section title="2. 选择资料并提取字段" subtitle="模型只生成候选；服务端会核对引用原文能否定位，无法定位的值直接拒绝">
         {docs.length === 0 ? (
           <Empty title="请先上传资料" hint="支持 PDF 页码、Excel 工作表/行列、Word 段落、图片 OCR 定位" />
         ) : (
@@ -183,7 +188,7 @@ export function DocsTab(props: TabProps) {
             {extractError !== null && <div className="mt"><ErrorBox error={extractError} /></div>}
             <div className="form-actions">
               <button className="btn" disabled={extracting || selected.length === 0} onClick={extract}>
-                {extracting ? "解析与校验中…" : "创建导入任务"}
+                {extracting ? "解析与校验中…" : "提取并核对字段"}
               </button>
             </div>
           </>
@@ -215,15 +220,16 @@ export function DocsTab(props: TabProps) {
       {activeLoading && <Section title="导入详情"><Loading /></Section>}
       {active && (
         <ImportEditor data={active} productDetail={detail}
-                      onRefresh={async () => { await reload(); await openImport(activeId); }} />
+                      onPublished={() => props.goTab("versions")} onRefresh={async () => { await reload(); await openImport(activeId); }} />
       )}
     </>
   );
 }
 
-function ImportEditor({ data, productDetail, onRefresh }: { data: any; productDetail: any; onRefresh: () => Promise<void> }) {
+function ImportEditor({ data, productDetail, onRefresh, onPublished }: { data: any; productDetail: any; onRefresh: () => Promise<void>; onPublished: () => void }) {
   const attrs = data.schema?.attributes || [];
   const editable = data.status === "reviewing";
+  const base = editable ? productDetail.latest_version : null;
   const [fields, setFields] = useState<Record<string, string>>({});
   const [basis, setBasis] = useState<Record<string, string>>({});
   const [resolutions, setResolutions] = useState<Record<string, string>>({});
@@ -238,14 +244,15 @@ function ImportEditor({ data, productDetail, onRefresh }: { data: any; productDe
     for (const attr of attrs) {
       const candidates = data.candidates?.[attr.key] || [];
       const first = candidates.find((item: any) => item.valid);
-      next[attr.key] = first?.value || "";
+      next[attr.key] = first?.value ?? base?.fields?.[attr.key] ?? "";
     }
     setFields(next);
+    setSku(base?.sku || "");
     setBasis({});
     setResolutions({});
     setError(null);
     setMessage("");
-  }, [data.id, data.status]);
+  }, [data.id, data.status, base?.id]);
 
   async function confirm() {
     setBusy("confirm");
@@ -258,6 +265,7 @@ function ImportEditor({ data, productDetail, onRefresh }: { data: any; productDe
       }
       const result = await api.post(`/imports/${data.id}/confirm`, {
         fields,
+        base_version_id: base?.id,
         sku,
         note,
         manual_basis: manualBasis,
@@ -265,6 +273,7 @@ function ImportEditor({ data, productDetail, onRefresh }: { data: any; productDe
       });
       setMessage(`已生成不可变版本 v${result.version}，受影响成品 ${result.affected_outputs} 个`);
       await onRefresh();
+      onPublished();
     } catch (err) {
       setError(err);
     } finally {
@@ -291,9 +300,11 @@ function ImportEditor({ data, productDetail, onRefresh }: { data: any; productDe
   }
 
   const labels = fieldLabels(productDetail);
+  const changed = base ? attrs.filter((attr: any) =>
+    (fields[attr.key] || "") !== (base.fields[attr.key] || "")) : [];
 
   return (
-    <Section title={`导入详情 · ${data.id.slice(0, 8)}`}
+    <Section title={`3. 核对字段 · ${data.id.slice(0, 8)}`}
              subtitle={`${data.category_name} · ${statusLabel(data.status)} · 创建于 ${formatTime(data.created_at)}`}
              actions={<Badge tone={statusTone(data.status)}>{statusLabel(data.status)}</Badge>}>
       {data.warnings?.length > 0 && (
@@ -320,7 +331,7 @@ function ImportEditor({ data, productDetail, onRefresh }: { data: any; productDe
                 {issue && <Badge tone={issue.type === "conflict" ? "danger" : issue.type === "missing" ? "warn" : "default"}>{issue.type === "conflict" ? "来源冲突" : issue.type === "missing" ? "待补充" : issue.type === "duplicate" ? "多来源一致" : "需核对"}</Badge>}
               </div>
               <div className="form-grid">
-                <Field label="采用值" required={attr.required}>
+                <Field label="采用值" required={attr.required} hint={base ? "当前生效值：" + (base.fields[attr.key] || "未填写") : undefined}>
                   <input value={fields[attr.key] || ""} disabled={!editable}
                          placeholder={attr.required ? "必填，待补充" : "可选"}
                          onChange={(event) => setFields({ ...fields, [attr.key]: event.target.value })} />
@@ -371,7 +382,7 @@ function ImportEditor({ data, productDetail, onRefresh }: { data: any; productDe
                   ))}
                 </div>
               )}
-              {candidates.length === 0 && <div className="muted small mt">没有可用候选，请人工填写并说明依据。</div>}
+              {candidates.length === 0 && <div className="muted small mt">{base?.fields?.[attr.key] ? "可沿用已确认值和来源。手工修改时请补充依据。" : "没有可用候选，请核实后补充。"}</div>}
             </div>
           );
         })}
@@ -380,13 +391,15 @@ function ImportEditor({ data, productDetail, onRefresh }: { data: any; productDe
       <div className="form-grid mt">
         <Field label="关联 SKU"><select value={sku} disabled={!editable} onChange={(event) => setSku(event.target.value)}>
           <option value="">不关联</option>
+          {base?.sku && !productDetail.skus.some((item: any) => item.sku_code === base.sku) && <option value={base.sku}>{base.sku}（沿用）</option>}
           {(productDetail.skus || []).map((item: any) => <option key={item.id} value={item.sku_code}>{item.sku_code}</option>)}
         </select></Field>
         <Field label="确认备注"><input value={note} disabled={!editable} onChange={(event) => setNote(event.target.value)} placeholder="人工复核说明" /></Field>
       </div>
       <div className="form-actions">
+        {base && <span className="muted small">相对 v{base.version}：{changed.length ? changed.map((attr: any) => attr.label).join("、") + "待更新" : "字段值无变更"}</span>}
         <button className="btn" disabled={!editable || !!busy} onClick={confirm}>
-          {busy === "confirm" ? "确认中…" : "人工确认并生成版本"}
+          {busy === "confirm" ? "确认中…" : "确认并设为生效版本"}
         </button>
         <button className="btn btn-ghost" disabled={!editable || !!busy} onClick={reject}>
           {busy === "reject" ? "提交中…" : "驳回"}
@@ -400,31 +413,31 @@ function ImportEditor({ data, productDetail, onRefresh }: { data: any; productDe
 
 export function AssetsTab({ detail, productId, reload }: TabProps) {
   const images = (detail.sources || []).filter((source: any) => source.kind === "image");
-  const tagged = images.filter((source: any) => source.view_angle);
-  const missing = ANGLES.filter((angle) => !tagged.some((source: any) => source.view_angle === angle.value));
+  const [editingId, setEditingId] = useState("");
+  const usable = ANGLES.flatMap((angle) => images.filter((source: any) =>
+    source.view_angle === angle.value && source.review_status === "confirmed"));
+  const other = images.filter((source: any) => !usable.includes(source));
+  const editing = images.find((source: any) => source.id === editingId);
+
+  function gallery(items: any[]) {
+    return <div className="reference-grid">{items.map((source) => (
+      <button key={source.id} className="reference-tile" onClick={() => setEditingId(source.id)}>
+        <img src={source.url} alt={source.name} loading="lazy" />
+        <strong>{angleLabel(source.view_angle)} · {statusLabel(source.review_status)}</strong>
+        <span className="ellipsis">{source.name}</span>
+      </button>
+    ))}</div>;
+  }
 
   return (
     <>
-      <Section title="六视角参考素材" subtitle="AI 建议视角后必须人工确认并保存；素材可关联 SKU，供策划与视频镜头选择">
-        <div className="pill-list mb">
-          {ANGLES.map((angle) => {
-            const exists = tagged.some((source: any) => source.view_angle === angle.value);
-            return <Badge key={angle.value} tone={exists ? "success" : "warn"}>{angle.label}{exists ? " ✓" : " 待补"}</Badge>;
-          })}
-        </div>
-        {missing.length > 0 && <Notice tone="warn">尚缺视角：{missing.map((item) => item.label).join("、")}。策划只使用已标注视角的图片。</Notice>}
+      <Section title={"可调用参考图（" + usable.length + "）"} subtitle="已确认且标过视角。点击图片查看原图、修改标注或停用旧素材。">
+        {usable.length ? gallery(usable) : <Empty title="暂无可调用参考图" hint="补充图片后标注视角并确认。" />}
       </Section>
-
-      {images.length === 0 ? (
-        <Section title="图片素材"><Empty title="还没有图片素材" hint="到“资料与导入”上传正面、背面、侧面、顶部、底部、内里图片" /></Section>
-      ) : (
-        <div className="grid auto">
-          {images.map((source: any) => (
-            <AssetCard key={source.id} source={source} productId={productId} skus={detail.skus || []} reload={reload} />
-          ))}
-        </div>
-      )}
-
+      {other.length > 0 && <Section title={"待整理与已停用（" + other.length + "）"}>{gallery(other)}</Section>}
+      {editing && <Modal title="编辑参考素材" onClose={() => setEditingId("")}>
+        <AssetCard key={editing.id} source={editing} productId={productId} skus={detail.skus || []} reload={reload} />
+      </Modal>}
       <ImageUpload productId={productId} skus={detail.skus || []} reload={reload} />
     </>
   );
@@ -588,7 +601,7 @@ function ImageUpload({ productId, skus, reload }: { productId: string; skus: any
 
 export function PlansTab(props: TabProps) {
   const { productId, detail, models, plans, outputs, reload, goTab } = props;
-  const images = (detail.sources || []).filter((source: any) => source.kind === "image" && source.view_angle);
+  const images = (detail.sources || []).filter((source: any) => source.kind === "image" && source.view_angle && source.review_status === "confirmed");
   const [scene, setScene] = useState("抖音春节年货节");
   const [channel, setChannel] = useState("抖音");
   const [audience, setAudience] = useState("约30岁女性");
@@ -646,18 +659,22 @@ export function PlansTab(props: TabProps) {
           <Field label="目标人群"><input value={audience} onChange={(event) => setAudience(event.target.value)} /></Field>
           <Field label="目标内容"><input value={contentType} onChange={(event) => setContentType(event.target.value)} /></Field>
         </div>
-        <div className="mt">
-          <div className="field-label mb">参考图（必选，至少一张）</div>
-          <div className="pill-list">
-            {images.map((image: any) => (
-              <label key={image.id} className="row gap small" style={{ gap: 6 }}>
-                <input type="checkbox" checked={selected.includes(image.id)}
-                       onChange={(event) => setSelected((current) =>
-                         event.target.checked ? [...current, image.id] : current.filter((id) => id !== image.id))} />
-                {image.name}（{angleLabel(image.view_angle)}）
-              </label>
-            ))}
-          </div>
+        <div className="record-links">
+          <Badge tone="success">商品事实 v{detail.latest_version.version}</Badge>
+          <button className="btn btn-small btn-ghost" onClick={() => goTab("overview")}>查看商品事实</button>
+          <span>已选 {selected.length} 张参考图</span>
+        </div>
+        <div className="reference-grid">
+          {images.map((image: any) => (
+            <label key={image.id} className="reference-tile">
+              <img src={image.url} alt={image.name} loading="lazy" />
+              <span><input type="checkbox" checked={selected.includes(image.id)}
+                onChange={(event) => setSelected((current) =>
+                  event.target.checked ? [...current, image.id] : current.filter((id) => id !== image.id))} />
+                {angleLabel(image.view_angle)}
+              </span>
+            </label>
+          ))}
         </div>
         <label className="row gap small mt">
           <input type="checkbox" checked={manual} onChange={(event) => setManual(event.target.checked)} />
@@ -864,13 +881,14 @@ export function ProductionTab(props: TabProps) {
   const confirmed = plans.filter((plan: any) => plan.status === "confirmed");
   const [selectedId, setSelectedId] = useState("");
   useEffect(() => {
-    if (!confirmed.find((plan: any) => plan.id === selectedId)) setSelectedId(confirmed[0]?.id || "");
+    if (!confirmed.find((plan: any) => plan.id === selectedId)) setSelectedId((confirmed.find((plan: any) => plan.is_current_version) || confirmed[0])?.id || "");
   }, [plans.map((plan: any) => `${plan.id}:${plan.status}`).join(",")]);
   const plan = confirmed.find((item: any) => item.id === selectedId);
   const [prompt, setPrompt] = useState("");
   const [ratio, setRatio] = useState("3:4");
   const [count, setCount] = useState(1);
   const [materials, setMaterials] = useState<string[]>([]);
+  const [imageReferences, setImageReferences] = useState<string[]>([]);
   const [videoProvider, setVideoProvider] = useState("ffmpeg");
   const [busy, setBusy] = useState("");
   const [elapsed, setElapsed] = useState(0);
@@ -881,6 +899,7 @@ export function ProductionTab(props: TabProps) {
     if (!plan) return;
     setPrompt(plan.content?.image_prompt || "");
     setMaterials((plan.source_ids || []).map((id: string) => `source:${id}`));
+    setImageReferences((plan.source_ids || []).filter((id: string) => usableReferences.some((source: any) => source.id === id)).slice(0, 4));
     setError(null);
     setMessage("");
   }, [selectedId]);
@@ -897,14 +916,18 @@ export function ProductionTab(props: TabProps) {
   const planOutputs = outputs.filter((output: any) => output.plan_id === selectedId && (!productionKind || output.kind === productionKind));
   const approvedImages = outputs.filter((output: any) =>
     output.kind === "image" && output.status === "approved" && !output.needs_review);
+  const usableReferences = detail.sources.filter((source: any) =>
+    source.kind === "image" && source.view_angle && source.review_status === "confirmed");
+  const selectedReferences = imageReferences.filter((id) => usableReferences.some((source: any) => source.id === id));
   const allMaterials = [
-    ...(plan?.materials || []).map((item: any) => ({
-      value: `source:${item.id}`, label: `${item.name}（${angleLabel(item.view_angle)}）`,
+    ...usableReferences.map((item: any) => ({
+      value: `source:${item.id}`, url: item.url, label: `${item.name}（${angleLabel(item.view_angle)}）`,
     })),
     ...approvedImages.map((output: any) => ({
-      value: `output:${output.id}`, label: `已审核商品图 ${output.id.slice(0, 6)}`,
+      value: `output:${output.id}`, url: output.url, label: `已审核商品图 ${output.id.slice(0, 6)}`,
     })),
   ];
+  const selectedMaterials = materials.filter((id) => allMaterials.some((item) => item.value === id));
 
   async function generate(kind: "image" | "video") {
     if (!plan) return;
@@ -912,7 +935,7 @@ export function ProductionTab(props: TabProps) {
     setError(null);
     setMessage("");
     try {
-      const body = kind === "image" ? { prompt, ratio, count } : { materials, provider: videoProvider };
+      const body = kind === "image" ? { prompt, ratio, count, reference_ids: selectedReferences } : { materials: selectedMaterials, provider: videoProvider };
       const result = await api.post(`/plans/${plan.id}/outputs/${kind}`, body);
       setMessage(kind === "image"
         ? `已生成 ${result.outputs.length} 张候选（尝试 ${result.attempts} 次），进入待审核队列`
@@ -944,9 +967,28 @@ export function ProductionTab(props: TabProps) {
         {plan && (
           <>
             <div className="muted small mb">商品版本 v{plan.version} · {plan.is_current_version ? "当前版本" : "非当前版本，不能生产"} · 分镜 {(plan.content.shots || []).length} 个</div>
+            {!plan.is_current_version && <div className="record-links">
+              <button className="btn btn-small btn-ghost" onClick={() => props.goTab("versions")}>查看资料变更</button>
+              <button className="btn btn-small" onClick={() => props.goTab("plans")}>基于当前版本重新策划</button>
+            </div>}
             <div className={productionKind ? "stack" : "grid two"}>
               {productionKind !== "video" && <div>
                 <div className="strong mb">生成商品图</div>
+                <p className="muted small">默认沿用策划中可用的参考图。可更换，最多 4 张，已选 {selectedReferences.length} 张。</p>
+                <div className="reference-grid">
+                  {usableReferences.map((source: any) => (
+                    <label key={source.id} className="reference-tile">
+                      <img src={source.url} alt={source.name} loading="lazy" />
+                      <span><input type="checkbox" checked={selectedReferences.includes(source.id)}
+                        disabled={!!busy || (!selectedReferences.includes(source.id) && selectedReferences.length >= 4)}
+                        onChange={(event) => setImageReferences(event.target.checked
+                          ? [...selectedReferences, source.id]
+                          : selectedReferences.filter((id) => id !== source.id))} />
+                        {angleLabel(source.view_angle)}
+                      </span>
+                    </label>
+                  ))}
+                </div>
                 <Field label="提示词" required><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} /></Field>
                 <div className="form-grid mt">
                   <Field label="比例"><select value={ratio} onChange={(event) => setRatio(event.target.value)}>
@@ -957,7 +999,7 @@ export function ProductionTab(props: TabProps) {
                                                  onChange={(event) => setCount(Number(event.target.value))} /></Field>
                 </div>
                 <div className="form-actions">
-                  <button className="btn" disabled={!!busy || !plan.is_current_version || !prompt.trim()}
+                  <button className="btn" disabled={!!busy || !plan.is_current_version || !prompt.trim() || !selectedReferences.length}
                           onClick={() => generate("image")}>
                     {busy === "image" ? `生成中… ${elapsed}s` : "生成商品图"}
                   </button>
@@ -968,27 +1010,28 @@ export function ProductionTab(props: TabProps) {
                 <Field label="生成方式">
                   <select value={videoProvider} onChange={(event) => setVideoProvider(event.target.value)}>
                     <option value="ffmpeg">FFmpeg 合成（约 12 秒 · 720×1280，免费本地合成）</option>
-                    <option value="seedance">Seedance AI 视频（图生视频，需已配置火山方舟视频模型）</option>
+                    <option value="seedance">Seedance AI 视频（图生视频，需已配置快跑视频模型）</option>
                   </select>
                 </Field>
                 <div className="muted small mb">
                   {videoProvider === "seedance"
-                    ? "使用已审核商品图作为首帧，AI 生成动态视频；输出比例跟随首帧图片。"
+                    ? "使用已审核商品图作为首帧，AI 生成动态视频；输出 9:16、720p 竖版。"
                     : "使用已审核商品图或原始参考图作为镜头素材；成品约 12 秒、720×1280。"}
                 </div>
-                <div className="stack" style={{ gap: 6 }}>
+                <div className="reference-grid">
                   {allMaterials.length === 0 && <div className="muted small">没有可用镜头素材</div>}
                   {allMaterials.map((item) => (
-                    <label key={item.value} className="row gap small" style={{ gap: 6 }}>
-                      <input type="checkbox" checked={materials.includes(item.value)}
+                    <label key={item.value} className="reference-tile">
+                      {item.url && <img src={item.url} alt={item.label} loading="lazy" />}
+                      <span><input type="checkbox" checked={materials.includes(item.value)}
                              onChange={(event) => setMaterials((current) =>
                                event.target.checked ? [...current, item.value] : current.filter((value) => value !== item.value))} />
-                      {item.label}
+                      {item.label}</span>
                     </label>
                   ))}
                 </div>
                 <div className="form-actions">
-                  <button className="btn" disabled={!!busy || !plan.is_current_version || materials.length === 0}
+                  <button className="btn" disabled={!!busy || !plan.is_current_version || selectedMaterials.length === 0}
                           onClick={() => generate("video")}>
                     {busy === "video" ? `生成中… ${elapsed}s` : (videoProvider === "seedance" ? "生成 AI 视频" : "合成 12 秒视频")}
                   </button>
@@ -1032,7 +1075,7 @@ export function QualityTab({ detail, outputs, reload }: TabProps) {
 
   return (
     <>
-      <Section title="质量审核" subtitle="对比参考图与成品；事实错误与视觉建议分开记录，人工终审">
+      <Section title="内容成品" subtitle="预览成果、查看使用的商品版本与参考图，并人工审核交付">
         <div className="filters">
           <Field label="类型"><select value={kind} onChange={(event) => setKind(event.target.value)}>
             <option value="">全部</option><option value="image">商品图</option><option value="video">短视频</option>

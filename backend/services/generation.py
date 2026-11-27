@@ -56,6 +56,7 @@ def _attempt(plan_id: str, kind: str, attempt: int, status: str, prompt: str,
 
 
 def _output(row: dict[str, Any]) -> dict[str, Any]:
+    params = loads(row.get("params_json"), {})
     with session() as db:
         plan = one(db, "SELECT p.*, v.version FROM plans p LEFT JOIN product_versions v ON v.id=p.version_id "
                        "WHERE p.id=?", (row["plan_id"],))
@@ -64,7 +65,9 @@ def _output(row: dict[str, Any]) -> dict[str, Any]:
         product = one(db, "SELECT id,name FROM products WHERE id=?", (plan["product_id"],)) if plan else None
         sources = []
         if plan:
-            for source_id in loads(plan["source_ids"], []):
+            plan_sources = loads(plan["source_ids"], [])
+            reference_ids = params.get("reference_ids", plan_sources[:4] if row["kind"] == "image" else plan_sources)
+            for source_id in reference_ids:
                 source = one(db, "SELECT id,name,mime,view_angle,purpose FROM sources WHERE id=?", (source_id,))
                 if source:
                     purpose = source.get("purpose") or "reference"
@@ -88,7 +91,7 @@ def _output(row: dict[str, Any]) -> dict[str, Any]:
         "provider": row.get("provider") or "",
         "model": row.get("model") or "",
         "prompt": row.get("prompt") or "",
-        "params": loads(row.get("params_json"), {}),
+        "params": params,
         "error": row.get("error") or "",
         "attempt": row.get("attempt") or 1,
         "source_output_id": row.get("source_output_id") or "",
@@ -164,10 +167,15 @@ def generate_image(plan_id: str, body: dict[str, Any]) -> dict[str, Any]:
     try:
         runs.step(run_id, "load_plan", "success", plan["scene"])
         runs.step(run_id, "check_version", "success", f"商品版本 {plan['version_id']}")
-        with session() as db:
-            source_ids = loads(plan["source_ids"], [])
-        for source_id in source_ids[:4]:
+        selected_ids = body.get("reference_ids")
+        source_ids = list(dict.fromkeys(selected_ids)) if selected_ids is not None else loads(plan["source_ids"], [])[:4]
+        for source_id in source_ids:
             source, path = catalog.source_file(plan["product_id"], source_id)
+            if selected_ids is not None and (
+                not source["mime"].startswith("image/") or not source.get("view_angle")
+                or source.get("review_status") != "confirmed"
+            ):
+                raise reject("请选择已确认且已标注视角的商品参考图")
             references.append({"content": path.read_bytes(), "mime": source["mime"]})
         if not references:
             raise reject("策划没有可用的参考图")
@@ -193,7 +201,7 @@ def generate_image(plan_id: str, body: dict[str, Any]) -> dict[str, Any]:
             path, name = _save(item["content"], item["mime"])
             output_id = uuid4().hex
             params = {**item.get("params", {}), "width": item["width"], "height": item["height"],
-                      "request_id": item.get("request_id", "")}
+                      "request_id": item.get("request_id", ""), "reference_ids": source_ids}
             try:
                 with session() as db:
                     db.execute(
@@ -274,7 +282,7 @@ def _generate_seedance(plan_id: str, prompt: str,
         except ApiError as error:
             last_error = error
             _attempt(plan_id, "video", attempt, "failed", prompt, {"duration": duration},
-                     error.code, error.message, provider="volcengine-ark")
+                     error.code, error.message, provider="kuaipao")
             runs.step(run_id, "provider", "failed", f"第 {attempt} 次：{error.message}")
             if error.code not in RETRYABLE or attempt >= 3:
                 raise
@@ -294,13 +302,13 @@ def _generate_seedance(plan_id: str, prompt: str,
                     "INSERT INTO outputs(id,plan_id,kind,filename,status,note,mime,size,provider,model,prompt,"
                     "params_json,error,attempt,source_output_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (output_id, plan_id, "video", name, "pending", "", "video/mp4", len(item["content"]),
-                     "volcengine-ark", item.get("model") or "", prompt, dumps(params), "", attempt, "", now()),
+                     "kuaipao", item.get("model") or "", prompt, dumps(params), "", attempt, "", now()),
                 )
         except Exception:
             path.unlink(missing_ok=True)
             raise
         _attempt(plan_id, "video", attempt, "success", prompt, params, output_id=output_id,
-                 provider="volcengine-ark", model=item.get("model") or "")
+                 provider="kuaipao", model=item.get("model") or "")
         created.append(get_output(output_id))
     runs.step(run_id, "store", "success", f"{len(created)} 个视频已保存")
     runs.step(run_id, "verify", "success",
@@ -325,7 +333,7 @@ def generate_video(plan_id: str, body: dict[str, Any]) -> dict[str, Any]:
         runs.finish(run_id, "failed", "缺少镜头素材", "invalid_input")
         raise reject("请选择至少一个镜头素材")
     prompt = str(content.get("image_prompt") or "").strip()
-    provider_label = "volcengine-ark" if provider == "seedance" else "ffmpeg"
+    provider_label = "kuaipao" if provider == "seedance" else "ffmpeg"
     try:
         runs.step(run_id, "load_plan", "success", f"{len(shots)} 个镜头")
         runs.step(run_id, "check_version", "success", f"商品版本 {plan['version_id']}")

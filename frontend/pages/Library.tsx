@@ -4,8 +4,8 @@ import { Badge, Empty, ErrorBox, Field, Loading, Section, statusTone } from "../
 import { OutputCard } from "../components";
 import { navigate, productPath } from "../router";
 
-export default function Library() {
-  const [tab, setTab] = useState<"outputs" | "sources">("outputs");
+export default function Library({ initialView = "outputs" }: { initialView?: "outputs" | "sources" }) {
+  const tab = initialView;
   const [products, setProducts] = useState<any[]>([]);
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,7 +63,7 @@ export default function Library() {
       <div className="topbar">
         <div>
 
-          <h1>内容资产库</h1>
+          <h1>{tab === "sources" ? "商品素材库" : "内容成品库"}</h1>
         </div>
         <div className="toolbar">
           <button className="btn btn-small btn-ghost" onClick={() => navigate("/studio")}>内容生产</button>
@@ -71,8 +71,8 @@ export default function Library() {
       </div>
 
       <div className="tabs">
-        <button className={tab === "outputs" ? "active" : ""} onClick={() => { requestId.current++; setTab("outputs"); }}>生成内容</button>
-        <button className={tab === "sources" ? "active" : ""} onClick={() => { requestId.current++; setTab("sources"); }}>参考素材</button>
+        <button className={tab === "outputs" ? "active" : ""} onClick={() => navigate("/library")}>生成内容</button>
+        <button className={tab === "sources" ? "active" : ""} onClick={() => navigate("/library?view=sources")}>参考素材</button>
       </div>
 
       <Section title="筛选" subtitle={tab === "outputs" ? "默认仅显示已通过审核的正式交付成品" : "原始素材保留关联商品、视角、用途与审核状态"}>

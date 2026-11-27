@@ -54,7 +54,7 @@ function App(){
   else if(route.segments[0]==="studio")page=<Studio key={route.hash} mode={route.segments[1]||"plans"}/>;
   else if(route.segments[0]==="tasks")page=<Tasks key={route.hash} initialStatus={route.params.get("status")||""}/>;
   else if(route.segments[0]==="reviews")page=<Reviews/>;
-  else if(route.segments[0]==="library")page=<Library/>;
+  else if(route.segments[0]==="library")page=<Library key={route.params.get("view") || "outputs"} initialView={route.params.get("view") === "sources" ? "sources" : "outputs"}/>;
   else page=<div className="card"><h1>页面不存在</h1><a href="#/">返回工作台</a></div>;
   return <div className="app-shell">
     {mobileOpen&&<button className="sidebar-backdrop" aria-label="关闭导航" onClick={()=>setMobileOpen(false)}/>}
@@ -65,7 +65,8 @@ function App(){
         {nav("/products","商品库","products",["products","imports"].includes(route.segments[0]))}
         <button className={"nav-parent "+(factoryActive?"current":"")} aria-expanded={factoryOpen} aria-controls="factory-navigation" onClick={()=>setFactoryOpen(v=>!v)}><Icon name="factory"/><span className="grow">AI 内容工厂</span><span className={"nav-chevron "+(factoryOpen?"expanded":"")} aria-hidden="true">›</span></button>
         <div id="factory-navigation" className="nav-children" hidden={!factoryOpen}>{FACTORY.map(i=><div key={i.path}>{nav(i.path,i.label,i.icon,route.path===i.path||(route.path==="/studio"&&i.path==="/studio/plans"))}</div>)}</div>
-        {nav("/library","内容资产库","assets",route.path==="/library")}
+        {nav("/library?view=sources","商品素材库","assets",route.path==="/library" && route.params.get("view")==="sources")}
+        {nav("/library","内容成品库","assets",route.path==="/library" && route.params.get("view")!=="sources")}
         {nav("/reviews","质量与交付","reviews",route.path==="/reviews")}
       </nav>
     </aside>

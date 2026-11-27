@@ -27,12 +27,12 @@ def classify_http_error(status: int, body: str, *, provider: str = "模型") -> 
     detail = f"（HTTP {status}{' ' + code if code else ''}）"
     if status == 401 or any(item in marker for item in _AUTH_MARKERS):
         return provider_error("auth", f"{provider}认证失败{detail}", hint=CATEGORY_HINTS["auth"])
-    if status == 403 or any(item in marker for item in _PERMISSION_MARKERS):
-        return provider_error("permission", f"{provider}权限不足{detail}", hint=CATEGORY_HINTS["permission"])
     if status == 429 or any(item in marker for item in _QUOTA_MARKERS):
         return provider_error(
             "quota", f"{provider}额度不足或被限流{detail}", status=429, hint=CATEGORY_HINTS["quota"]
         )
+    if status == 403 or any(item in marker for item in _PERMISSION_MARKERS):
+        return provider_error("permission", f"{provider}权限不足{detail}", hint=CATEGORY_HINTS["permission"])
     if status >= 500:
         return provider_error("http", f"{provider}服务暂时不可用{detail}", hint=CATEGORY_HINTS["http"])
     return provider_error("http", f"{provider}调用失败{detail}", hint=CATEGORY_HINTS["http"])

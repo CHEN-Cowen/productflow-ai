@@ -260,6 +260,10 @@ def confirm(import_id: str, body: dict[str, Any]) -> dict[str, Any]:
         raise conflict("该导入任务已驳回，请重新提取")
     with session() as db:
         category = catalog.category(db, row.get("category_id") or row["category"])
+        base = one(db, "SELECT * FROM product_versions WHERE product_id=? AND id=?",
+                   (row["product_id"], body["base_version_id"])) if body.get("base_version_id") else None
+    if body.get("base_version_id") and not base:
+        raise reject("找不到该商品的更新基准版本")
     schema = category["schema"]
     attrs = {attr["key"]: attr for attr in attributes(schema)}
     fields, errors = rules.validate_fields(schema, body.get("fields") or {})
@@ -270,6 +274,8 @@ def confirm(import_id: str, body: dict[str, Any]) -> dict[str, Any]:
     stamp = now()
     operator = tenants.current_operator()
     provenance: dict[str, Any] = {}
+    base_fields = loads(base["fields"], {}) if base else {}
+    base_provenance = loads(base["provenance_json"], {}) if base else {}
     missing_basis: list[str] = []
     for key, value in fields.items():
         attr = attrs[key]
@@ -279,7 +285,9 @@ def confirm(import_id: str, body: dict[str, Any]) -> dict[str, Any]:
              if item.get("valid") and rules.values_equal(attr, submitted, item)),
             None,
         )
-        if matched:
+        if base_provenance.get(key) and base_fields.get(key) == value:
+            provenance[key] = base_provenance[key]
+        elif matched:
             provenance[key] = {
                 "source_id": matched.get("source_id"),
                 "source_name": matched.get("source_name"),
@@ -316,8 +324,14 @@ def confirm(import_id: str, body: dict[str, Any]) -> dict[str, Any]:
             raise reject("异常处理方式无效")
         resolutions.append({"issue_id": item["issue_id"], "resolution": item["resolution"]})
     with session() as db, db:
+        db.execute("BEGIN IMMEDIATE")
+        current_import = one(db, "SELECT status FROM imports WHERE id=?", (import_id,))
+        if not current_import or current_import["status"] in {"confirmed", "rejected"}:
+            raise conflict("该导入任务已处理，请刷新页面")
         previous = one(db, "SELECT * FROM product_versions WHERE product_id=? ORDER BY version DESC, id DESC LIMIT 1",
                        (row["product_id"],))
+        if base and (not previous or previous["id"] != base["id"]):
+            raise conflict("当前商品版本已变化，请重新打开导入任务并核对")
         version_number = (previous["version"] + 1) if previous else 1
         cursor = db.execute(
             "INSERT INTO product_versions(tenant_id,product_id,import_id,category,category_id,version,fields,provenance_json,"

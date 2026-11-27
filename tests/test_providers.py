@@ -8,7 +8,11 @@ from backend.providers.errors import classify_http_error
 from tests.helpers import PNG_1X1
 
 
-def test_health_and_model_status(client):
+def test_health_and_model_status(client, monkeypatch):
+    for name in ("LLM_URL", "LLM_MODEL", "LLM_API_KEY",
+                 "IMAGE_URL", "IMAGE_MODEL", "IMAGE_API_KEY",
+                 "VIDEO_URL", "VIDEO_MODEL", "VIDEO_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
     health = client.get("/api/v1/health").json()
     assert health["status"] == "ok"
     assert "llm" in health["models"] and "image" in health["models"]

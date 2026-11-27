@@ -66,6 +66,26 @@ def test_pdf_extract_confirm_and_provenance(client, mock_llm):
     assert provenance["dimensions"]["status"] == "verified"
 
 
+def test_update_retains_existing_field_provenance(client, mock_llm):
+    product_id = "GOVUPD"
+    client.post("/api/v1/products", json={"id": product_id, "name": "版本更新测试"})
+    _, initial = _extract(client, mock_llm, product_id, LINES, ITEMS)
+    first = confirm_fields(client, initial["id"], FIELDS)
+    _, update = _extract(client, mock_llm, product_id,
+                         ["BP01 Ladies Backpack Specification v2", "Color: brown"],
+                         [], name="新版规格.pdf")
+    response = client.post(f"/api/v1/imports/{update['id']}/confirm", json={
+        "base_version_id": first["import"]["version_id"],
+        "fields": {**FIELDS, "color": "brown"},
+        "manual_basis": {"color": "供应商确认新版面料颜色"},
+    })
+    assert response.status_code == 200, response.text
+    version = client.get(f"/api/v1/products/{product_id}").json()["latest_version"]
+    assert version["version"] == 2
+    assert version["provenance"]["dimensions"]["source_name"] == "规格.pdf"
+    assert version["provenance"]["color"]["method"] == "manual"
+
+
 def test_missing_fields_and_manual_basis(client, mock_llm):
     client.post("/api/v1/products", json={"id": "GOV02", "name": "缺失字段测试"})
     lines = ["Only body material", "Body Material: wool blend 70 percent"]

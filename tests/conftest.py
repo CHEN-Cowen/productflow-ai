@@ -85,7 +85,7 @@ def mock_video(monkeypatch):
             "width": 0,
             "height": 0,
             "request_id": "req-video-test",
-            "provider": "volcengine-ark",
+            "provider": "kuaipao",
             "model": "seedance-test",
             "params": {"prompt": prompt, "resolution": "720p", "ratio": "adaptive", "duration": duration,
                        "seed": 1, "generate_audio": False, "reference_count": len(references or []),

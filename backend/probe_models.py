@@ -50,6 +50,7 @@ def main() -> None:
     parser.add_argument("provider", choices=("config", "llm", "image"))
     parser.add_argument("--reference", type=Path)
     args = parser.parse_args()
+    config.configure()
     if args.provider == "config":
         print(json.dumps(config.model_status(), ensure_ascii=False, indent=2))
         return

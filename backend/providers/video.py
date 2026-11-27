@@ -1,8 +1,8 @@
-"""Seedance 视频生成适配器：火山方舟 /api/v3/contents/generations/tasks 异步任务式接口。
+"""Seedance 视频生成适配器：快跑（Kuaipao）统一视频接口 POST /v2/videos。
 
-- 图生视频-首帧：以参考图作为 first_frame，ratio 固定 adaptive（输出跟随首帧宽高比）
-- 流程：创建任务 → 轮询查询 → 下载视频
-- 视频 URL 有效期 24 小时，需及时下载到本地
+- 图生视频-首帧：以参考图作为 input_reference，输出 9:16、720p、无声
+- 流程：创建任务 → 轮询 GET /v2/videos/{id} → 下载 video_url
+- video_url 在 expires_at 前有效，需及时下载到本地
 """
 from __future__ import annotations
 
@@ -20,6 +20,10 @@ from ..errors import CATEGORY_HINTS, provider_error
 from .errors import classify_http_error
 
 log = logging.getLogger("productflow.video")
+
+# 项目视频输出标准：9:16 竖屏、720p、无声，与 FFmpeg 合成链路保持一致
+DEFAULT_ASPECT_RATIO = "9:16"
+DEFAULT_RESOLUTION = "720p"
 
 
 def _config_missing(cfg: dict[str, str]) -> list[str]:
@@ -81,7 +85,7 @@ def _json_request(url: str, *, method: str, payload: dict | None = None,
 def _create_task(payload: dict, cfg: dict[str, str]) -> tuple[str, str]:
     result, request_id = _json_request(cfg["url"], method="POST", payload=payload,
                                        key=cfg["key"], timeout=float(cfg["timeout"]))
-    task_id = result.get("id")
+    task_id = result.get("id") or result.get("task_id")
     if not task_id:
         raise provider_error("format", "视频生成任务响应缺少 id", hint=CATEGORY_HINTS["format"])
     return str(task_id), request_id
@@ -99,12 +103,16 @@ def _wait(task_id: str, cfg: dict[str, str]) -> dict:
     while True:
         result = _get_task(task_id, cfg)
         status = str(result.get("status") or "")
-        if status == "succeeded":
+        if status == "completed":
             return result
-        if status in {"failed", "cancelled", "expired"}:
+        if status == "failed":
             error = result.get("error") or {}
-            message = str(error.get("message") or error.get("code") or f"任务{status}")
-            raise provider_error("http", f"视频生成任务{status}：{message}", hint=CATEGORY_HINTS["http"])
+            code = str(error.get("code") or "generation_failed")
+            message = str(error.get("message") or "视频生成失败")
+            if code == "timeout":
+                raise provider_error("timeout", f"视频生成任务超时：{message}", status=504,
+                                     hint=CATEGORY_HINTS["timeout"])
+            raise provider_error("http", f"视频生成任务失败：{message}", hint=CATEGORY_HINTS["http"])
         if time.monotonic() >= deadline:
             raise provider_error("timeout", "视频生成轮询超时，任务仍在处理中", status=504,
                                  hint=CATEGORY_HINTS["timeout"])
@@ -151,38 +159,34 @@ def generate(
             status=503,
             hint=CATEGORY_HINTS["not_configured"],
         )
-    content: list[dict] = [{"type": "text", "text": prompt}]
-    for item in (references or [])[:1]:
-        encoded = base64.b64encode(item["content"]).decode("ascii")
-        content.append({
-            "type": "image_url",
-            "role": "first_frame",
-            "image_url": {"url": f"data:{item['mime']};base64,{encoded}"},
-        })
+    aspect_ratio = (ratio or "").strip() or DEFAULT_ASPECT_RATIO
+    seconds = max(1, int(duration or 12))
     payload: dict = {
         "model": cfg["model"],
-        "content": content,
-        "ratio": "adaptive",
+        "prompt": prompt,
+        "seconds": str(seconds),
+        "resolution": DEFAULT_RESOLUTION,
+        "aspect_ratio": aspect_ratio,
         "generate_audio": False,
     }
-    if duration and int(duration) > 0:
-        payload["duration"] = int(duration)
+    for item in (references or [])[:1]:
+        encoded = base64.b64encode(item["content"]).decode("ascii")
+        payload["input_reference"] = f"data:{item['mime']};base64,{encoded}"
     task_id, request_id = _create_task(payload, cfg)
     result = _wait(task_id, cfg)
-    video_url = str((result.get("content") or {}).get("video_url") or "")
+    video_url = str(result.get("video_url") or "")
     if not video_url:
-        raise provider_error("format", "视频生成任务成功但缺少 video_url", hint=CATEGORY_HINTS["format"])
+        raise provider_error("format", "视频生成任务完成但缺少 video_url", hint=CATEGORY_HINTS["format"])
     video = _download(video_url, cfg)
     if len(video) > 100 * 1024 * 1024:
         raise provider_error("format", "视频文件超过 100 MB 上限", hint=CATEGORY_HINTS["format"])
     _check_mp4(video)
     params = {
         "prompt": prompt,
-        "ratio": str(result.get("ratio") or "adaptive"),
-        "resolution": str(result.get("resolution") or ""),
-        "duration": result.get("duration"),
-        "seed": result.get("seed"),
-        "generate_audio": bool(result.get("generate_audio")),
+        "ratio": str(result.get("aspect_ratio") or aspect_ratio),
+        "resolution": str(result.get("resolution") or DEFAULT_RESOLUTION),
+        "duration": int(result.get("seconds") or seconds),
+        "size": str(result.get("size") or ""),
         "reference_count": len(references or []),
         "task_id": task_id,
     }
@@ -192,7 +196,7 @@ def generate(
         "width": 0,
         "height": 0,
         "request_id": request_id or task_id,
-        "provider": "volcengine-ark",
+        "provider": "kuaipao",
         "model": cfg["model"],
         "params": params,
     }]

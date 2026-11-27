@@ -150,7 +150,7 @@ def test_seedance_video_generation(client, mock_llm, mock_video):
     output = created.json()["outputs"][0]
     assert output["kind"] == "video"
     assert output["status"] == "pending"
-    assert output["provider"] == "volcengine-ark"
+    assert output["provider"] == "kuaipao"
     assert output["params"]["resolution"] == "720p"
     assert output["params"]["duration"] == 12
     assert mock_video["calls"][0]["duration"] == 12

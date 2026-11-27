@@ -73,6 +73,7 @@ class Resolution(BaseModel):
 
 class ConfirmIn(BaseModel):
     fields: dict[str, Any]
+    base_version_id: int | None = None
     sku: str = ""
     note: str = ""
     manual_basis: dict[str, str] = Field(default_factory=dict)
@@ -117,6 +118,7 @@ class ImageIn(BaseModel):
     prompt: str = ""
     ratio: str = "3:4"
     count: int = Field(default=1, ge=1, le=4)
+    reference_ids: list[str] | None = Field(default=None, min_length=1, max_length=4)
     source_output_id: str = ""
 
 
